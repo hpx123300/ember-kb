@@ -54,11 +54,13 @@ def _split_long(text: str, size: int, overlap: int) -> list[str]:
     return parts
 
 
-def _split_chunks(text: str, source: str) -> list[dict]:
+def _split_chunks(text: str, source: str, meta: dict | None = None) -> list[dict]:
     """按 Markdown 标题（# / ## / ###）分块，保留章节标题作为上下文。
 
     过长小节会再切成 CHUNK_MAX_CHARS 的窗口、相邻窗口保留 CHUNK_OVERLAP_CHARS 重叠。
+    每个块带上文档级元信息与可点击的引用标识（cite），回答里引用它就是引用原文。
     """
+    meta = meta or {}
     chunks: list[dict] = []
     current_title = source
     current_lines: list[str] = []
@@ -70,7 +72,15 @@ def _split_chunks(text: str, source: str) -> list[dict]:
         if not body:
             return
         for piece in _split_long(body, RAG_CHUNK_MAX_CHARS, RAG_CHUNK_OVERLAP_CHARS):
-            chunks.append({"title": current_title, "text": piece, "source": source})
+            chunks.append(
+                {
+                    "title": current_title,
+                    "text": piece,
+                    "source": source,
+                    "meta": meta,
+                    "cite": f"{source}#{current_title}",
+                }
+            )
 
     for line in text.splitlines():
         if re.match(r"^#{1,3}\s", line):
@@ -82,11 +92,38 @@ def _split_chunks(text: str, source: str) -> list[dict]:
     return chunks
 
 
+def _parse_frontmatter(text: str) -> tuple[dict, str]:
+    """解析文档头部的 --- 元信息块，返回 (meta, 正文)。
+
+    元信息决定检索能不能按部门/类别过滤，所以放在正文之外单独解析，
+    不参与分块，否则会被当成正文内容影响关键词得分。
+    """
+    if not text.startswith("---"):
+        return {}, text
+    end = text.find("\n---", 3)
+    if end == -1:
+        return {}, text
+    header = text[3:end].strip()
+    body = text[end + 4 :].lstrip("\n")
+    meta: dict[str, str] = {}
+    for line in header.splitlines():
+        if ":" not in line:
+            continue
+        key, value = line.split(":", 1)
+        meta[key.strip()] = value.strip()
+    return meta, body
+
+
 def _tokenize(text: str) -> list[str]:
-    """中文用 jieba 分词，英文/数字用正则切分；无 jieba 时退化为正则。"""
+    """中文用 jieba 搜索模式分词，英文/数字用正则切分；无 jieba 时退化为正则。
+
+    用 lcut_for_search 而不是 lcut，是为了让「必修课程」也能切出「必修课」，
+    否则用户问「必修课有哪些」会完全召不回写着「必修课程」的那一节。
+    索引与查询必须用同一种切法，否则匹配规则不一致。
+    """
     if jieba is None:
         return [t for t in re.split(r"[\s，。；、？（）()]+", text) if t]
-    return [t for t in jieba.lcut(text) if t.strip()]
+    return [t for t in jieba.lcut_for_search(text) if t.strip()]
 
 
 class BM25:
@@ -159,10 +196,21 @@ class KnowledgeBase:
         self._fingerprint = fingerprint
         chunks: list[dict] = []
         for path in sorted(KNOWLEDGE_DIR.glob("*.md")):
-            chunks.extend(_split_chunks(path.read_text(encoding="utf-8"), path.name))
+            meta, body = _parse_frontmatter(path.read_text(encoding="utf-8"))
+            chunks.extend(_split_chunks(body, path.name, meta))
         self.chunks = chunks
         self._bm25 = BM25().fit([f"{c['title']}\n{c['text']}" for c in chunks])
         self._load_vector_index()
+
+    def categories(self) -> list[str]:
+        """知识库里出现过的类别，供前端筛选器使用。"""
+        self.load()
+        seen: list[str] = []
+        for chunk in self.chunks:
+            category = (chunk.get("meta") or {}).get("category")
+            if category and category not in seen:
+                seen.append(category)
+        return seen
 
     def _load_vector_index(self) -> None:
         """尝试加载/构建向量索引；失败则退化为纯 BM25 检索。"""
@@ -192,21 +240,42 @@ class KnowledgeBase:
             self._embeddings = None
             self._index = None
 
-    def _vector_search(self, query: str, k: int) -> list[dict]:
+    def _vector_search(self, query: str, k: int, allowed: list[int] | None = None) -> list[dict]:
         import numpy as np
 
         q = _get_embedding_model().encode([query], normalize_embeddings=True)
-        scores, idxs = self._index.search(np.asarray(q, dtype="float32"), min(k, len(self.chunks)))
-        return [dict(self.chunks[i], score=float(scores[0][j])) for j, i in enumerate(idxs[0])]
+        # 语料规模小，直接全量检索再按类别过滤，避免"先截断再过滤"漏掉同类别结果
+        scores, idxs = self._index.search(np.asarray(q, dtype="float32"), len(self.chunks))
+        results = []
+        for j, i in enumerate(idxs[0]):
+            if allowed is not None and int(i) not in allowed:
+                continue
+            results.append(dict(self.chunks[int(i)], score=float(scores[0][j])))
+            if len(results) >= k:
+                break
+        return results
 
-    def _keyword_search(self, query: str, k: int) -> list[dict]:
+    def _keyword_search(self, query: str, k: int, allowed: list[int] | None = None) -> list[dict]:
+        indexes = allowed if allowed is not None else range(len(self.chunks))
         scored = []
-        for i, chunk in enumerate(self.chunks):
+        for i in indexes:
             score = self._bm25.score(query, i)
             if score > 0:
-                scored.append((score, chunk))
+                scored.append((score, self.chunks[i]))
         scored.sort(key=lambda x: -x[0])
         return [dict(c, score=round(float(s), 4)) for s, c in scored[:k]]
+
+    def _allowed_indexes(self, category: str | None) -> list[int]:
+        """按类别圈定候选块。先过滤再打分，是"不串部门"的关键——
+        打完分再筛会丢掉本该命中的同类结果，而语料越多越明显。
+        """
+        if not category:
+            return list(range(len(self.chunks)))
+        return [
+            i
+            for i, c in enumerate(self.chunks)
+            if (c.get("meta") or {}).get("category") == category
+        ]
 
     @staticmethod
     def _rrf_merge(ranked_lists: list[list[dict]], k: int = RAG_RRF_K) -> list[dict]:
@@ -227,15 +296,23 @@ class KnowledgeBase:
             item.pop("ranks", None)
         return merged
 
-    def search(self, query: str, k: int = 3) -> list[dict]:
+    def search(self, query: str, k: int = 4, category: str | None = None) -> list[dict]:
+        """检索相关章节。
+
+        category 为空表示全库检索；指定后只在该类别内召回，
+        用于"销售问销售、客服问客服"的场景，避免跨部门串答案。
+        """
         self.load()
         if not self.chunks:
             return []
-        keyword = self._keyword_search(query, k=max(k, 5))
+        allowed = self._allowed_indexes(category)
+        if not allowed:
+            return []
+        keyword = self._keyword_search(query, k=max(k, 6), allowed=allowed)
         if not self._vector_enabled:
             return keyword[:k]
         try:
-            vector = self._vector_search(query, k=max(k, 5))
+            vector = self._vector_search(query, k=max(k, 6), allowed=set(allowed))
             merged = self._rrf_merge([keyword, vector], k=RAG_RRF_K)
             return merged[:k]
         except Exception:

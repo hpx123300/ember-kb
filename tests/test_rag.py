@@ -1,38 +1,50 @@
-"""RAG 检索测试：分块、关键词检索、指纹。"""
+"""检索层测试：元信息解析、分块、按类别过滤、引用定位。"""
 
-from backend.app.agent.rag import KnowledgeBase, _split_chunks
+from backend.app.agent.rag import _parse_frontmatter, _split_chunks, knowledge_base
+
+
+def test_frontmatter_parsed_out_of_body():
+    """元信息不进入正文，否则会污染关键词得分。"""
+    raw = "---\ncategory: 制度\naudience: 全员\n---\n# 标题\n\n正文内容"
+    meta, body = _parse_frontmatter(raw)
+    assert meta["category"] == "制度"
+    assert meta["audience"] == "全员"
+    assert body.startswith("# 标题")
+    assert "category" not in body
 
 
 def test_split_by_headers():
-    text = "# 主题A\n内容A1\n内容A2\n\n## 小节\n内容B\n"
-    chunks = _split_chunks(text, "test.md")
-    assert len(chunks) == 2
-    assert chunks[0]["title"] == "主题A"
-    assert "内容A2" in chunks[0]["text"]
-    assert chunks[1]["title"] == "小节"
+    chunks = _split_chunks("# 一\n内容一\n## 二\n内容二", "doc.md", {"category": "制度"})
+    assert [c["title"] for c in chunks] == ["一", "二"]  # H1 本身也是一节
+    assert all(c["cite"].startswith("doc.md#") for c in chunks)
 
 
-def test_keyword_search_returns_relevant():
-    kb = KnowledgeBase()
-    kb.load()
-    results = kb.search("什么是 GIL", k=3)
-    assert results, "关键词检索应有结果"
-    assert any("python_basics" in r["source"] for r in results)
+def test_chunks_carry_metadata_and_citation():
+    knowledge_base.load()
+    chunk = knowledge_base.chunks[0]
+    assert chunk["meta"].get("category")
+    assert chunk["cite"].startswith(chunk["source"] + "#")
 
 
-def test_fingerprint_stable():
-    kb1 = KnowledgeBase()
-    kb1.load()
-    kb2 = KnowledgeBase()
-    kb2.load()
-    assert kb1._fingerprint == kb2._fingerprint
+def test_category_filter_excludes_other_categories():
+    """指定类别后，结果里不能出现别的类别——这是「不串部门」的硬约束。"""
+    results = knowledge_base.search("定价 多少钱", k=4, category="产品")
+    assert results, "产品类目下应该能召回定价内容"
+    assert all(r["meta"]["category"] == "产品" for r in results)
 
 
-def test_rrf_merge_ranks_common_results_higher():
-    kb = KnowledgeBase()
-    list_a = [{"source": "a.md", "title": "A"}, {"source": "b.md", "title": "B"}, {"source": "c.md", "title": "C"}]
-    list_b = [{"source": "b.md", "title": "B"}, {"source": "c.md", "title": "C"}, {"source": "a.md", "title": "A"}]
-    merged = kb._rrf_merge([list_a, list_b])
-    # B 两路召回中平均名次最靠前 -> 融合后得分最高
-    assert merged[0]["title"] == "B"
-    assert merged[0]["score"] > merged[1]["score"] > merged[2]["score"]
+def test_category_filter_keeps_recall_within_category():
+    """过滤不能把本该命中的同类别内容筛掉。"""
+    results = knowledge_base.search("年假 几天", k=3, category="制度")
+    titles = [r["title"] for r in results]
+    assert any("年假" in t for t in titles)
+
+
+def test_keyword_recall_hits_expected_doc():
+    results = knowledge_base.search("住宿标准 一线城市", k=3)
+    assert any(r["source"] == "handbook-expense.md" for r in results)
+
+
+def test_unknown_category_returns_empty():
+    """不存在的类别应返回空，而不是悄悄退回全库。"""
+    assert knowledge_base.search("年假", k=3, category="不存在的类别") == []

@@ -18,10 +18,18 @@ jobs:
         run: pip install -r requirements.txt
       - name: Run tests
         run: python -m pytest -q
-      # 检索层评测是确定性的、不调用模型，所以可以放进 CI 做回归门槛。
-      # 编排层与面试闭环要真调 API，只在本地按需跑（scripts/eval_all.py）。
-      - name: Retrieval eval (offline, no API calls)
-        run: python scripts/eval_all.py --offline
+      # 评测要真调模型，CI 里没有 key，只在本地跑：python scripts/eval_qa.py --save
+      # CI 守的是「结构没坏」：导入正常、知识库可加载、接口路由齐全。
+      - name: Smoke check (imports + knowledge base)
+        run: |
+          python -c "import sys; sys.path.insert(0,'.')
+          from backend.app.agent.rag import knowledge_base
+          from backend.app import training
+          import server.main
+          knowledge_base.load()
+          assert len(training.list_chapters()) >= 8
+          print('chapters:', len(training.list_chapters()), 'chunks:', len(knowledge_base.chunks))"
+          
 
   frontend:
     name: Frontend · typecheck + build

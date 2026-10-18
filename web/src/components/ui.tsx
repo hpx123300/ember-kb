@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Loader2, Star } from "lucide-react";
+import { Loader2 } from "lucide-react";
 
 export function Button({
   children,
@@ -26,56 +26,99 @@ export function Card({
   children,
   className = "",
   style,
+  hover = false,
 }: {
   children: ReactNode;
   className?: string;
   style?: React.CSSProperties;
+  hover?: boolean;
 }) {
   return (
-    <div className={`panel p-5 ${className}`} style={style}>
+    <div className={`panel p-5 ${hover ? "panel-hover" : ""} ${className}`} style={style}>
       {children}
     </div>
   );
 }
 
-export function SectionTitle({ children }: { children: ReactNode }) {
+export function SectionTitle({
+  title,
+  desc,
+  right,
+}: {
+  title: string;
+  desc?: string;
+  right?: ReactNode;
+}) {
   return (
-    <h2 className="text-[13px] font-bold tracking-wide text-ink-soft mt-7 mb-2.5 first:mt-0">
-      {children}
-    </h2>
+    <div className="flex items-end justify-between gap-4 mb-4">
+      <div>
+        <div className="display text-[19px] text-ink">{title}</div>
+        {desc ? <div className="text-[12.5px] text-muted mt-1">{desc}</div> : null}
+      </div>
+      {right}
+    </div>
   );
 }
 
-export function Badge({
-  children,
-  tone = "neutral",
+export function Stat({
+  label,
+  value,
+  hint,
 }: {
-  children: ReactNode;
-  tone?: "neutral" | "accent" | "ok" | "warn" | "bad";
+  label: string;
+  value: ReactNode;
+  hint?: string;
 }) {
-  const tones: Record<string, string> = {
-    neutral: "border-line text-ink-soft bg-panel",
-    accent: "border-accent/20 text-accent bg-accent-soft",
-    ok: "border-ok/20 text-ok bg-[#f0f9f2]",
-    warn: "border-warn/25 text-warn bg-[#fdf6ec]",
-    bad: "border-bad/20 text-bad bg-[#fdf3f3]",
-  };
-  return <span className={`chip ${tones[tone]}`}>{children}</span>;
+  return (
+    <div className="panel px-4 py-3.5">
+      <div className="text-[11px] text-faint tracking-wide">{label}</div>
+      <div className="display text-[24px] text-ink mt-1 leading-none">{value}</div>
+      {hint ? <div className="text-[11px] text-muted mt-1.5">{hint}</div> : null}
+    </div>
+  );
 }
 
-export function LevelBadge({ level }: { level: string }) {
-  const map: Record<string, { label: string; tone: "ok" | "neutral" | "warn" | "bad" }> = {
-    strong: { label: "扎实", tone: "ok" },
-    solid: { label: "合格", tone: "neutral" },
-    developing: { label: "待练", tone: "warn" },
-    weak: { label: "薄弱", tone: "bad" },
-  };
-  const item = map[level] || { label: level, tone: "neutral" as const };
-  return <Badge tone={item.tone}>{item.label}</Badge>;
+export function EmptyState({
+  title,
+  desc,
+  action,
+}: {
+  title: string;
+  desc?: string;
+  action?: ReactNode;
+}) {
+  return (
+    <div className="panel py-14 px-8 text-center animate-fade">
+      <div className="display text-[17px] text-ink">{title}</div>
+      {desc ? (
+        <p className="text-[12.5px] text-muted mt-2 max-w-sm mx-auto leading-relaxed">{desc}</p>
+      ) : null}
+      {action ? <div className="mt-5 flex justify-center">{action}</div> : null}
+    </div>
+  );
 }
 
-export function Progress({ value, max = 100 }: { value: number; max?: number }) {
-  const pct = Math.max(0, Math.min(100, (value / max) * 100));
+export function Loading({ label = "加载中" }: { label?: string }) {
+  return (
+    <div className="flex items-center justify-center gap-2 py-16 text-[12.5px] text-muted">
+      <Loader2 size={14} className="animate-spin" />
+      {label}
+    </div>
+  );
+}
+
+export function Skeleton({ rows = 3 }: { rows?: number }) {
+  return (
+    <div className="space-y-3">
+      {Array.from({ length: rows }).map((_, i) => (
+        <div key={i} className="skeleton" style={{ height: i === 0 ? 56 : 44, opacity: 1 - i * 0.12 }} />
+      ))}
+    </div>
+  );
+}
+
+export function Progress({ value, max = 1 }: { value: number; max?: number }) {
+  const pct = Math.max(0, Math.min(100, (value / (max || 1)) * 100));
   return (
     <div className="progress-track">
       <div className="progress-fill" style={{ width: `${pct}%` }} />
@@ -83,99 +126,17 @@ export function Progress({ value, max = 100 }: { value: number; max?: number }) 
   );
 }
 
-export function Field({ label, children, hint }: { label: string; children: ReactNode; hint?: string }) {
+/** 打字指示：三个点依次呼吸，比"正在输入…"更轻 */
+export function Typing() {
   return (
-    <div>
-      <label className="label">{label}</label>
-      {children}
-      {hint ? <p className="text-[11.5px] text-muted mt-1.5">{hint}</p> : null}
-    </div>
-  );
-}
-
-export function TextArea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
-  return <textarea className="input min-h-[100px] resize-y leading-relaxed" {...props} />;
-}
-
-export function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
-  return <input className="input" {...props} />;
-}
-
-export function Select(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
-  return <select className="input cursor-pointer" {...props} />;
-}
-
-export function Stat({
-  label,
-  value,
-  sub,
-}: {
-  label: string;
-  value: string | number;
-  sub?: string;
-}) {
-  return (
-    <Card className="px-5 py-4">
-      <div className="text-[11.5px] text-muted">{label}</div>
-      <div className="display text-[30px] leading-tight mt-1">{value}</div>
-      {sub ? <div className="text-[11.5px] text-faint mt-0.5">{sub}</div> : null}
-    </Card>
-  );
-}
-
-export function Spinner({ text = "处理中…" }: { text?: string }) {
-  return (
-    <div className="flex items-center gap-2 text-[13px] text-muted">
-      <Loader2 size={15} className="animate-spin" />
-      {text}
-    </div>
-  );
-}
-
-export function DifficultyStars({ value }: { value: number }) {
-  return (
-    <span className="inline-flex items-center gap-[2px] align-middle">
-      {[1, 2, 3, 4, 5].map((i) => (
-        <Star
+    <div className="flex items-center gap-1.5 py-1">
+      {[0, 1, 2].map((i) => (
+        <span
           key={i}
-          size={11}
-          className={i <= value ? "text-accent fill-accent" : "text-line fill-line-2"}
+          className="h-1.5 w-1.5 rounded-full bg-accent"
+          style={{ animation: "blink 1.1s ease-in-out infinite", animationDelay: `${i * 0.16}s` }}
         />
       ))}
-    </span>
-  );
-}
-
-export function BulletList({ items }: { items: string[] }) {
-  if (!items || items.length === 0) return <div className="text-[12.5px] text-faint">暂无</div>;
-  return (
-    <ul className="space-y-1.5">
-      {items.map((it, i) => (
-        <li key={i} className="flex gap-2 text-[13px] text-ink-soft leading-relaxed">
-          <span className="text-accent/70 mt-[9px] h-1 w-1 rounded-full bg-accent/50 shrink-0" />
-          <span>{it}</span>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-export function EmptyState({ title, desc }: { title: string; desc?: string }) {
-  return (
-    <Card className="py-10 text-center">
-      <div className="text-[14px] font-semibold text-ink-soft">{title}</div>
-      {desc ? <div className="text-[12.5px] text-muted mt-1.5">{desc}</div> : null}
-    </Card>
-  );
-}
-
-export function Verdict({ score }: { score: number }) {
-  const pass = score >= 60;
-  return (
-    <span
-      className={`text-[13px] font-bold ${pass ? "text-ok" : "text-warn"}`}
-    >
-      {pass ? "达标" : "待加强"}
-    </span>
+    </div>
   );
 }

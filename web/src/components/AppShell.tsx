@@ -1,29 +1,20 @@
 import type { ReactNode } from "react";
-import {
-  ClipboardList,
-  History,
-  LayoutDashboard,
-  MessageSquare,
-  UserRound,
-  FileText,
-} from "lucide-react";
+import { BookOpen, Compass, Flame, Library } from "lucide-react";
 
-export type PageKey = "chat" | "interview" | "war" | "history" | "profile";
+export type PageKey = "ask" | "learn" | "insights" | "library";
 
-const NAV: Array<{ key: PageKey; label: string; icon: typeof MessageSquare }> = [
-  { key: "chat", label: "自由对话", icon: MessageSquare },
-  { key: "interview", label: "模拟面试", icon: ClipboardList },
-  { key: "war", label: "复盘与作战室", icon: LayoutDashboard },
-  { key: "history", label: "历史报告", icon: History },
-  { key: "profile", label: "我的档案", icon: UserRound },
+const NAV: Array<{ key: PageKey; label: string; icon: typeof Compass }> = [
+  { key: "ask", label: "问答", icon: Compass },
+  { key: "learn", label: "培训", icon: BookOpen },
+  { key: "insights", label: "学情", icon: Flame },
+  { key: "library", label: "资料", icon: Library },
 ];
 
 const TITLES: Record<PageKey, { eyebrow: string; title: string; desc: string }> = {
-  chat: { eyebrow: "Free Chat", title: "自由对话", desc: "多 Agent 协作：面试官 / 八股讲师 / 求职顾问" },
-  interview: { eyebrow: "Mock Interview", title: "模拟面试", desc: "JD 画像 + 项目深挖 + 评分标准驱动的完整闭环" },
-  war: { eyebrow: "Insights", title: "复盘与作战室", desc: "得分趋势 / 薄弱维度 / 待办清单 / 面经复盘" },
-  history: { eyebrow: "History", title: "历史报告", desc: "回看历次面试的评分报告与问答记录" },
-  profile: { eyebrow: "Profile", title: "我的档案", desc: "目标岗位 + 项目经历 + 目标 JD，驱动个性化出题" },
+  ask: { eyebrow: "Ask", title: "问一句，答一句", desc: "每个结论都带出处，查不到会直说" },
+  learn: { eyebrow: "Learn", title: "按章节学，学完就考", desc: "资料即课程，测验结果自动进学情" },
+  insights: { eyebrow: "Insights", title: "你的学情", desc: "哪章过了、哪章最该补，一眼看完" },
+  library: { eyebrow: "Library", title: "资料库", desc: "上传 Markdown，索引自动重建" },
 };
 
 export default function AppShell({
@@ -37,19 +28,19 @@ export default function AppShell({
 }) {
   const meta = TITLES[page];
   return (
-    <div className="min-h-screen flex">
-      {/* 侧边栏 */}
-      <aside className="hidden md:flex w-[208px] shrink-0 flex-col border-r border-line bg-[#f6f4ef] px-3 py-5">
-        <div className="flex items-center gap-2.5 px-2 mb-8">
-          <div className="h-8 w-8 rounded-[10px] bg-accent text-white grid place-items-center font-bold text-[15px]">
-            面
+    <div className="min-h-screen flex relative z-[1]">
+      <aside className="hidden md:flex w-[228px] shrink-0 flex-col border-r border-line bg-[#f6f1e7] px-4 py-6">
+        <div className="flex items-center gap-2.5 px-2 mb-9">
+          <div className="h-9 w-9 rounded-[12px] bg-accent text-[#fff8f2] grid place-items-center shadow-[0_4px_12px_-6px_rgba(192,101,63,0.9)]">
+            <Flame size={17} strokeWidth={2} />
           </div>
           <div className="leading-tight">
-            <div className="text-[13.5px] font-bold text-ink">AI 面试智能系统</div>
-            <div className="text-[10.5px] text-faint">AI Interview Coach</div>
+            <div className="display text-[16px] text-ink">薪火</div>
+            <div className="font-mono text-[9.5px] tracking-[0.18em] text-faint uppercase">Ember</div>
           </div>
         </div>
-        <nav className="space-y-1">
+
+        <nav className="space-y-0.5">
           {NAV.map((item) => {
             const Icon = item.icon;
             const active = page === item.key;
@@ -57,29 +48,30 @@ export default function AppShell({
               <button
                 key={item.key}
                 onClick={() => onNavigate(item.key)}
-                className={`w-full flex items-center gap-2.5 rounded-[10px] px-3 py-2 text-[13px] font-medium transition-colors ${
+                className={`relative w-full flex items-center gap-2.5 rounded-[11px] px-3 py-2.5 text-[13px] transition-colors duration-200 ${
                   active
-                    ? "bg-panel text-accent shadow-[0_1px_2px_rgba(23,23,26,0.06)] border border-line"
-                    : "text-ink-soft hover:bg-panel/70"
+                    ? "bg-panel text-ink border border-line"
+                    : "text-muted hover:text-ink hover:bg-panel/60 border border-transparent"
                 }`}
               >
-                <Icon size={15} strokeWidth={2} />
+                {active && (
+                  <span className="absolute left-0 top-1/2 -translate-y-1/2 h-4 w-[2px] rounded-r bg-accent" />
+                )}
+                <Icon size={15} strokeWidth={active ? 2.1 : 1.8} className={active ? "text-accent" : ""} />
                 {item.label}
               </button>
             );
           })}
         </nav>
-        <div className="mt-auto px-2 pt-6 text-[10.5px] leading-relaxed text-faint">
-          借鉴 DeepInterview · 聆悟
-          <br />
-          面试记录保存在本地 SQLite
+
+        <div className="mt-auto px-2 pt-8 space-y-1.5">
+          <div className="text-[10.5px] leading-relaxed text-faint">知识库 · 本地部署</div>
+          <div className="text-[10.5px] leading-relaxed text-faint">数据不出内网，回答只依据资料</div>
         </div>
       </aside>
 
-      {/* 主区域 */}
       <div className="flex-1 min-w-0 flex flex-col">
-        {/* 移动端导航 */}
-        <div className="md:hidden flex gap-1.5 overflow-x-auto px-4 pt-4 pb-1 border-b border-line bg-paper">
+        <div className="md:hidden flex gap-1 overflow-x-auto px-4 pt-4 pb-1 border-b border-line bg-paper">
           {NAV.map((item) => {
             const Icon = item.icon;
             const active = page === item.key;
@@ -87,8 +79,8 @@ export default function AppShell({
               <button
                 key={item.key}
                 onClick={() => onNavigate(item.key)}
-                className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] font-medium whitespace-nowrap ${
-                  active ? "bg-accent text-white" : "bg-panel text-muted border border-line"
+                className={`flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-[12px] whitespace-nowrap transition-colors ${
+                  active ? "bg-accent text-[#fff8f2]" : "bg-panel text-muted border border-line"
                 }`}
               >
                 <Icon size={12} />
@@ -97,12 +89,14 @@ export default function AppShell({
             );
           })}
         </div>
-        <header className="px-6 md:px-10 pt-7 md:pt-9 pb-2">
+
+        <header className="px-6 md:px-12 pt-8 md:pt-12 pb-2">
           <div className="eyebrow">{meta.eyebrow}</div>
-          <h1 className="display text-[26px] md:text-[30px] mt-1 text-ink">{meta.title}</h1>
-          <p className="text-[13px] text-muted mt-1.5">{meta.desc}</p>
+          <h1 className="display text-[28px] md:text-[34px] mt-2 text-ink">{meta.title}</h1>
+          <p className="text-[13px] text-muted mt-2">{meta.desc}</p>
         </header>
-        <main className="flex-1 px-6 md:px-10 pb-16 pt-4">{children}</main>
+
+        <main className="flex-1 px-6 md:px-12 pb-20 pt-5">{children}</main>
       </div>
     </div>
   );

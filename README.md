@@ -1,198 +1,131 @@
-# AI 面试智能系统
+# 薪火 Ember
 
-面向「大模型 / AI 应用开发」第一次实习的**多 Agent + RAG 面试陪练应用**。绑定个人档案与目标 JD，自动生成专属面试官，覆盖**面试前设计 → 面试中陪练 → 面试后评分**的完整闭环。
+面向中小团队的企业知识库问答与培训助手。把公司制度、产品手册、销售话术、客服口径放进来，
+员工问一句就能得到**带出处**的答案；学完一章可以当堂测验，测验结果自动汇成学情。
 
-它不是通用聊天机器人：面试官会围绕你的真实项目与岗位要求深挖追问，结束后给出评分标准驱动的结构化报告与补强计划。
+不是「接个大模型就能问答」的演示：**查不到会拒答，答出来能点回原文，答完能考，考完有记录。**
 
-## 它解决了什么
+## 为什么是这四个功能
 
-| 痛点 | 解法 |
-| --- | --- |
-| 没人陪练、练习没反馈 | 主管 Agent 路由 + 模拟面试官 / 八股讲师 / 求职顾问三个专员协作，Function Calling 驱动真实工具调用 |
-| 复习没重点、八股全靠背 | RAG 知识库（8 份文档 / 98 道题库）提供有依据的讲解，检索质量可用 Recall@K / MRR 量化 |
-| 面试必问项目，但不会讲 | 「我的档案」绑定真实项目，面试自动插入约 30% 项目深挖题（技术选型 / 难点 / 量化 / 失败与改进） |
-| 练了没进步、复盘靠感觉 | rubric 驱动的整场评分（能力分 0–5）+ 学习教练生成补强计划 + 历史对比 |
+| 功能 | 解决什么 | 关键取舍 |
+| --- | --- | --- |
+| 知识问答 | 员工查制度、查口径，不用翻文档 | 引用可追溯；资料外拒答，不猜 |
+| 章节测验 | 培训不能只发文档，得知道学没学会 | 题目由资料生成，答案不下发前端 |
+| 学情画像 | 管理者看进度，员工看短板 | 只存原始作答，掌握度实时算 |
+| 资料管理 | 制度改了要立刻生效 | Markdown 上传即重建索引 |
 
-## 面试闭环
+## 效果数字
 
-- **prep 面试前**：粘贴目标 JD → 解析岗位画像（必须项 / 加分项 / 职责 / 技术栈）→ 与个人档案做差距分析 → 生成完整问题计划（难度曲线 1–5、考察能力、评分标准 rubric、追问种子）
-- **live 面试中**：面试官按 rubric 逐题点评并给出 0–5 分，追问方向提前可见
-- **post 面试后**：逐题评分 → 能力分聚合 → 最弱题的改进参考答案 → 学习教练生成补强模块
+42 条标注集（34 条可答 + 5 条语料外 + 3 条注入），跑 `scripts/eval_qa.py`：
+
+| 指标 | 结果 | 含义 |
+| --- | --- | --- |
+| 回答率 | 100% | 该答的都答了 |
+| 要点命中率 | 97.1% | 关键数字与结论出现在回答里 |
+| 引用准确率 | 97.1% | 引用指向的文档与标注一致 |
+| 拒答准确率 | 100% | 语料外拒答、语料内不误拒 |
+| 注入防御率 | 100% | 3 条提示词攻击全部挡住 |
+| 平均 / P95 延迟 | 2.0s / 2.9s | 含一次检索、一次判官、一次生成 |
 
 ## 技术栈
 
-- **后端**：FastAPI · SQLite（SQLAlchemy 2.x）· Pydantic
-- **前端**：React 18 · TypeScript · Vite
-- **大模型**：DeepSeek（OpenAI 兼容接口），支持流式输出
-- **编排**：自研主管路由 + **LangGraph 状态图**两种实现，环境变量切换
-- **检索**：jieba 分词 + **BM25** 关键词检索；可选 **FAISS + m3e 向量检索**，双路 **RRF** 融合
-- **工程化**：pytest（28 项）· GitHub Actions CI
+Python 3.13 · FastAPI · SQLAlchemy/SQLite · jieba BM25 · LangGraph · DeepSeek（OpenAI 兼容）
+React 18 · TypeScript · Vite · Tailwind v4 · lucide-react
+pytest（27 项）· GitHub Actions
 
 ## 架构
 
-```mermaid
-flowchart TD
-    U[用户输入] --> R[主管 Agent / RouterAgent]
-    R -->|delegate| I[模拟面试官 / query_question]
-    R -->|delegate| T[八股讲师 / search_knowledge]
-    R -->|delegate| C[求职顾问 / query_job + search_knowledge]
-    R -->|直接回复| U
-    I --> KB[(知识库<br/>8 份文档 / 98 道题库)]
-    T --> KB
-    C --> KB
-    KB --> BM[BM25 关键词检索]
-    KB --> V[FAISS 向量检索]
-    BM --> RRF[RRF 融合]
-    V --> RRF
 ```
-
-**分层设计**：主管只负责意图路由（单次 LLM 调用，不生成业务答案）；三个专员各自持有独立的系统提示词与工具子集；所有步骤写入统一轨迹（trace）供前端展示。
+前端（React）
+  ├─ 问答   /api/ask       SSE 流式，token → 引用 → 拒答判定
+  ├─ 培训   /api/quiz      出题（结构化校验）/ 判分 / 学情
+  ├─ 学情   /api/mastery   章节掌握度、薄弱项
+  └─ 资料   /api/library   上传 / 删除 / 重建索引
+                    │
+后端（FastAPI）
+  ├─ flow.py      LangGraph：检索 → 判官 → 回答 / 拒答
+  ├─ coach.py     Function Calling 循环（查资料 / 出题 / 看进度）
+  ├─ training.py  章节派生、出题校验、判分、掌握度聚合
+  ├─ library.py   Markdown 管理，指纹变化自动重建索引
+  ├─ agent/rag.py 标题分块 + 元信息 + BM25 + RRF
+  └─ metrics.py   成本 / 延迟 / 工具成功率记账
+```
 
 ## 快速开始
 
 ```bash
-# 1. 依赖
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-
-# 2. 配置（复制后填入 DEEPSEEK_API_KEY）
-cp .env.example .env
-
-# 3. 启动（后端 8001 + 前端）
-./start.command
+cp .env.example .env          # 填 DEEPSEEK_API_KEY
+python scripts/seed_demo.py   # 可选：灌几条学习记录，学情页有东西看
+./start.command               # 后端 8001 + 前端
 ```
 
-可选：启用向量检索（体积较大，按需安装）
+打开 http://127.0.0.1:8001 即可。前端单独开发：`cd web && npm install && npm run dev`。
+
+## 三个值得看的设计
+
+### 1. 拒答是图上的一个分支，不是提示词里的一句请求
+
+`flow.py` 用 LangGraph 把「资料够不够」做成显式节点：检索 → 判官 → 回答 / 拒答。
+判官是一次独立的模型调用，只回答「这些资料能不能答这个问题」。
+
+为什么不用关键词覆盖率判定：问「竞争对手的定价是多少」时，资料里有「产品」「定价」，
+覆盖率很高，但答出来的是自家价格——这是最危险的一类错，因为它看起来完全正常。
+多花一次调用换判断准确，是这个场景必须付的成本。
+
+覆盖率仍然保留，但只做两件事：覆盖率归零时直接拒（省一次调用），以及判官不可用时兜底。
+
+### 2. 引用从检索结果一路带到界面
+
+每个 chunk 自带 `cite`（`文件名#章节`），回答里写 `[1]`，服务端把编号映射回真实来源，
+前端渲染成可展开的出处卡片。模型编出 `[9]` 这种不存在的编号会被丢弃，不会凭空造引用。
+
+回答若一条引用都没有，会重试一次更严格的提示；仍拿不到就标记为「无依据」，不当作正常回答。
+
+### 3. 章节是文档派生出来的，不是单独维护的课程表
+
+`training.py` 直接从知识库文档生成章节与小节。加一份 Markdown 就多一章，
+「资料管理」和「培训课程」是同一份数据的两种看法——避免了两处维护、两份数据打架。
+
+出题走结构化校验：模型返回的题必须字段齐全、答案下标合法、选项不重复，
+不合格的题单条丢弃；模型不可用时退化为原文挖空题，保证培训流程不中断。
+
+## 测试与评测
 
 ```bash
-pip install -r requirements-rag.txt   # faiss-cpu + sentence-transformers
+pytest tests/ -q                      # 27 项：检索过滤、拒答分支、引用映射、出题校验、判分、上传校验
+python scripts/eval_qa.py --save      # 42 条标注集，输出指标并落盘
+python scripts/eval_qa.py --limit 6   # 冒烟，不花钱
 ```
 
-未安装时自动降级为纯 BM25 关键词检索，功能不受影响。
+评测报告带提示词版本哈希与 commit：提示词一改行为就变，没有版本号的数字不可比。
 
-## 核心设计
-
-### 1. 两种编排实现：自研路由 vs LangGraph
-
-多 Agent 编排做了两套实现，对外接口完全一致（`chat` / `chat_stream` / `trace`），用环境变量切换：
-
-```bash
-AGENT_ENGINE=custom      # 默认，自研主管路由，零额外依赖
-AGENT_ENGINE=langgraph   # LangGraph 状态图
-```
-
-分工是清楚的：**LangGraph 只接管编排层，专员内部仍然复用同一个手写 Function Calling 循环**。所以两种引擎的工具执行、记忆、轨迹完全一致，差异只在「谁来调度」，可以拿同一套测试公平对比。
-
-- `agent/harness.py`（自研）：用普通函数串起「主管路由 → 专员执行」，状态靠对象属性隐式传递。逻辑直白，但新增角色要改 if/else，状态不可见。
-- `agent/graph.py`（LangGraph）：把状态显式建成 `AgentState`，路由用条件边表达，每个专员是独立节点。流式用 `stream_mode=["custom","values"]`，同时拿到 token 流和最终状态（含轨迹）。
-
-为什么两套都留着：手写版是为了搞清底层机制，LangGraph 版是为了拿到显式状态、可视化的图结构，以及检查点与人工介入能力。写完之后对「框架到底帮你做了什么」有第一手判断，而不是二选一。
-
-LangGraph 版真正用上的两个框架能力，不是把 if/else 画成图：
-
-- **检查点**：`SqliteSaver` 把每轮图状态落到 `data/agent_checkpoints.db`，`thread_id` 按「会话 + 单轮」生成。一轮之内的断点续答与事后回放都成立，跨轮记忆仍由 `Memory` + `chat_history` 负责，职责不重叠。
-- **中断**：用户说「完整面试 / 正式面试」这类长任务时，图在 `confirm` 节点 `interrupt()`，前端弹出「预计 15 分钟，是否开始」；用户点按钮后走 `/api/chat/resume`，用 `Command(resume=...)` 从断点继续。`confirm` 节点必须幂等——恢复时 LangGraph 会重放它，所以 `interrupt()` 之前不能有任何副作用。
-
-`agent/loop.py` 本身仍然是完整的工具调用循环，包含**流式场景下的 tool_calls 分片拼装**：流式返回时工具参数分片到达，需按 `index` 聚合、按 `id` 归并后才能执行。同步与流式两条路径共用同一套工具执行与轨迹记录逻辑。
-
-### 2. 成本与延迟可观测
-
-`backend/app/metrics.py` 记录每次模型调用的 token、耗时，以及每次工具调用的成功与否：
-
-- 调用明细落 SQLite（`llm_calls` / `tool_calls`），只存聚合字段，**不存 prompt 原文**——原文可能含简历等个人信息；
-- `/api/metrics` 输出调用数、成本、P50/P95 延迟、分角色与分工具明细；
-- 流式路径开了 `stream_options={"include_usage": true}`，最后一个 chunk 的 `choices` 是空数组、只带 `usage`，取 `choices[0]` 会 IndexError，必须先判空；
-- 统计写入吞掉所有异常：观测层自己不能变成故障点。
-
-单价走环境变量（`LLM_PRICE_INPUT_PER_M` / `LLM_PRICE_OUTPUT_PER_M`），供应商调价不用改代码。
-
-### 3. 跨场次弱点画像
-
-`backend/app/weakness.py` 把最近 5 场面试报告聚合出维度短板与高频问题，注入面试官与求职顾问的提示词。
-
-刻意不用向量库：评分维度、建议条目都是结构化数据，SQL 聚合比语义检索更准，也更容易解释「这条建议为什么会出现」。建议条目按跨场次出现次数排序——出现一次的通常是那场题目的偶发问题，重复出现的才是稳定短板。
-
-### 4. 混合检索与 RRF
-
-`backend/app/agent/rag.py`：
-
-- **分块**：按 Markdown 标题感知切分；过长小节再切成带重叠的窗口，避免边界上下文丢失
-- **关键词召回**：BM25（含 IDF 与文档长度归一化），而非原始词频计数
-- **向量召回**：m3e-base 编码 + FAISS 内积索引；索引持久化，文档指纹变更后自动重建
-- **融合**：RRF（Reciprocal Rank Fusion，k=60）合并双路排名，无需归一化不同量纲的分数
-
-### 5. 消息序列安全截断
-
-`backend/app/agent/memory.py`：大模型 API 要求「tool 消息必须紧跟带 tool_calls 的 assistant 消息」「每个 tool_call_id 都要有响应」。按条数硬截断会破坏这两种配对并导致 400 错误，因此在出参前统一做一次安全修剪。
-
-## 评测
-
-一条命令跑完全部，带阈值与基线对比：
-
-```bash
-python scripts/eval_all.py --offline    # 只跑检索层，不调用模型、不花钱
-python scripts/eval_all.py --save       # 全量，结果写入 data/eval/reports/
-python scripts/eval_all.py --baseline data/eval/reports/20261017_220010.json
-```
-
-每个指标都有下限，低于下限退出码为 1，所以能直接挂 CI。报告里记录提示词版本哈希与 git commit——提示词一改行为就变，没有版本号的评测数字是不可比的。
-
-### RAG 检索（`python scripts/eval_rag.py`）
-
-命中粒度为**文档级**（期望文档出现在 Top-3 即算命中）：
-
-| 评测组 | 题量 | Recall@3 | MRR |
-| --- | --- | --- | --- |
-| A 术语型（复用文档术语） | 71 | 1.000 | 0.951 |
-| B 改述型（不复用文档术语） | 10 | 0.900 | 0.667 |
-
-**怎么读这组数**：A 组接近满分说明知识库主题区分度好，但题目复用了文档术语，属于**偏容易的基线**；B 组刻意改述后指标明显下降，恰好说明**纯关键词检索无法处理语义改写**——这也是接入向量检索的动机。默认环境下未安装 FAISS，实际运行在纯 BM25 模式。
-
-### 多 Agent 路由（`python scripts/eval_agent.py`）
-
-50 道题覆盖 4 类意图（面试官 / 讲师 / 顾问 / 直接回复），输出路由准确率、工具准确率、回答完整率。该脚本会真实调用大模型 API。
-
-### 面试闭环（`python scripts/eval_interview.py`）
-
-检查出题字段完整率、点评追问完整率、评分结构完整率、复盘结构完整率。同样需要真实调用。
-
-CI 里只跑 `--offline` 的检索层：它确定性、免费，适合当回归门槛；另两项要真调 API，按需在本地跑。
-
-## 测试
-
-```bash
-pytest tests/ -q      # 36 项：路由与专员协作、LangGraph 编排与中断恢复、成本记账、记忆回填、RAG 分块与检索、档案与复盘存储
-```
-
-## 目录结构
+## 目录
 
 ```
 backend/app/
+  flow.py         知识问答图（检索 → 判官 → 回答/拒答）
+  coach.py        培训教练（Function Calling）
+  training.py     章节、出题、判分、学情
+  library.py      资料管理
+  llm.py          模型调用（文本 / JSON / 流式）
+  metrics.py      成本与延迟记账
+  db.py           会话、学习记录、调用指标
   agent/
-    loop.py         Function Calling 循环（同步 + 流式）
-    harness.py      自研多 Agent 编排：主管路由 + 专员
-    graph.py        LangGraph 编排：StateGraph + 条件边 + 检查点 + 中断（AGENT_ENGINE=langgraph）
-    core.py         编排引擎统一入口 build_harness()
-    roles.py        各角色提示词与工具子集
-    rag.py          分块 + BM25 + 向量 + RRF
-    memory.py       会话记忆与安全截断
-  db.py             SQLAlchemy 模型
-  interview.py      面试闭环（prep / live / post）
-  profile.py        个人档案与 JD 解析
-server/
-  main.py           FastAPI 接口与 SSE 流式
-data/
-  knowledge/        8 份知识库文档
-  questions.json    98 道题库
+    rag.py        分块 + 元信息 + BM25 + RRF
+    loop.py       Function Calling 循环（同步 + 流式）
+    memory.py     消息序列安全截断
+    roles.py      教练提示词 + 版本号
+  tools/          工具声明与实现
+server/main.py    API 与静态托管
 scripts/
-  eval_rag.py       RAG 检索评测
-  eval_agent.py     多 Agent 路由评测
-web/                React + TypeScript 前端
+  eval_qa.py      问答评测
+  seed_demo.py    演示学习记录
+web/              React 前端
+data/knowledge/   9 份企业资料（虚构公司，自编内容）
+data/eval/        标注集与历史报告
 ```
-
-## 设计参考
-
-架构参考了 [DeepInterview](https://github.com/ngoanpv/DeepInterview)（Apache-2.0）的 prep/live/post 三段式与 rubric 评分、[聆悟 ai-interview-platform](https://github.com/yuanzhongqiao/ai-interview-platform)（MIT）的自然语言面试设计。代码为本项目重写实现。
 
 ## License
 

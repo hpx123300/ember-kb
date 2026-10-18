@@ -1,1 +1,1 @@
-"""Agent 层：记忆 / 循环 / 角色 / 多 Agent 编排。"""
+"""Agent 层：记忆 / Function Calling 循环 / 提示词 / 检索。"""

@@ -1,9 +1,15 @@
-"""SQLite 持久化：会话历史 + 面试场次（Agent 记忆回填 / 前端展示 / 评分报告）。"""
+"""SQLite 持久化：会话历史、学习记录、调用指标。
+
+四张表各有明确职责：
+- chat_messages：问答历史，同时用于回填对话记忆
+- learn_records：章节测验结果，学情画像的唯一数据源
+- llm_calls / tool_calls：成本与延迟记账，只存聚合字段，不存正文
+"""
 
 from contextlib import contextmanager
 from datetime import datetime, timezone
 
-from sqlalchemy import String, Text, create_engine, text
+from sqlalchemy import String, Text, create_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
 
 from .config import DB_PATH, ensure_dirs
@@ -17,6 +23,10 @@ engine = create_engine(
 SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
 
 
+def utcnow() -> datetime:
+    return datetime.now(timezone.utc)
+
+
 class Base(DeclarativeBase):
     pass
 
@@ -28,56 +38,29 @@ class ChatMessage(Base):
     session_id: Mapped[str] = mapped_column(String(64), index=True)
     role: Mapped[str] = mapped_column(String(16))
     content: Mapped[str] = mapped_column(Text, default="")
-    created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(default=utcnow)
 
 
-class Interview(Base):
-    """一次模拟面试场次：方向、状态、总分与完整评分报告。"""
+class LearnRecord(Base):
+    """一次章节测验的记录。
 
-    __tablename__ = "interviews"
+    只存原始作答结果，不存「掌握度」这类派生值——掌握度由聚合算出来，
+    口径改了可以重算，存死了就改不动。
+    """
 
-    id: Mapped[str] = mapped_column(String(64), primary_key=True)
-    profile_key: Mapped[str] = mapped_column(String(32), index=True)
-    direction: Mapped[str] = mapped_column(String(32), default="通用")
-    status: Mapped[str] = mapped_column(String(16), default="ongoing")
-    score: Mapped[int] = mapped_column(default=0)
-    report: Mapped[str] = mapped_column(Text, default="")
-    plan: Mapped[str] = mapped_column(Text, default="")
-    prep: Mapped[str] = mapped_column(Text, default="")
-    created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(timezone.utc))
-    finished_at: Mapped[datetime | None] = mapped_column(nullable=True)
-
-
-class InterviewQA(Base):
-    """面试中的一道题：题目、作答、点评、追问、追问作答与参考答案。"""
-
-    __tablename__ = "interview_qa"
+    __tablename__ = "learn_records"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    interview_id: Mapped[str] = mapped_column(String(64), index=True)
-    question: Mapped[str] = mapped_column(Text, default="")
-    topic: Mapped[str] = mapped_column(String(32), default="")
-    level: Mapped[str] = mapped_column(String(16), default="")
-    hint: Mapped[str] = mapped_column(Text, default="")
-    difficulty: Mapped[int] = mapped_column(default=0)
-    competency: Mapped[str] = mapped_column(String(64), default="")
-    rubric: Mapped[str] = mapped_column(Text, default="[]")
-    seed_followups: Mapped[str] = mapped_column(Text, default="[]")
-    answer: Mapped[str] = mapped_column(Text, default="")
-    answer_score: Mapped[int] = mapped_column(default=0)
-    feedback: Mapped[str] = mapped_column(Text, default="")
-    followup: Mapped[str] = mapped_column(Text, default="")
-    followup_answer: Mapped[str] = mapped_column(Text, default="")
-    reference: Mapped[str] = mapped_column(Text, default="")
-    created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(timezone.utc))
+    employee: Mapped[str] = mapped_column(String(32), index=True, default="local")
+    chapter: Mapped[str] = mapped_column(String(64), index=True)
+    score: Mapped[int] = mapped_column(default=0)
+    total: Mapped[int] = mapped_column(default=0)
+    passed: Mapped[bool] = mapped_column(default=False)
+    created_at: Mapped[datetime] = mapped_column(default=utcnow, index=True)
 
 
 class LLMCall(Base):
-    """一次模型调用的成本与延迟记录（可观测性的原始数据）。
-
-    只存聚合需要的字段，不存 prompt 原文——原文可能含简历等个人信息，
-    落库会带来不必要的隐私面。
-    """
+    """一次模型调用的成本与延迟记录（可观测性的原始数据）。"""
 
     __tablename__ = "llm_calls"
 
@@ -89,9 +72,7 @@ class LLMCall(Base):
     completion_tokens: Mapped[int] = mapped_column(default=0)
     latency_ms: Mapped[int] = mapped_column(default=0)
     ok: Mapped[bool] = mapped_column(default=True)
-    created_at: Mapped[datetime] = mapped_column(
-        default=lambda: datetime.now(timezone.utc), index=True
-    )
+    created_at: Mapped[datetime] = mapped_column(default=utcnow, index=True)
 
 
 class ToolCall(Base):
@@ -106,78 +87,11 @@ class ToolCall(Base):
     ok: Mapped[bool] = mapped_column(default=True)
     latency_ms: Mapped[int] = mapped_column(default=0)
     error: Mapped[str] = mapped_column(Text, default="")
-    created_at: Mapped[datetime] = mapped_column(
-        default=lambda: datetime.now(timezone.utc), index=True
-    )
-
-
-class UserProfile(Base):
-    """候选人档案：目标岗位、技能栈、项目经历（个人画像，驱动个性化出题）。"""
-
-    __tablename__ = "user_profiles"
-
-    profile_key: Mapped[str] = mapped_column(String(32), primary_key=True)
-    target_role: Mapped[str] = mapped_column(String(64), default="")
-    target_direction: Mapped[str] = mapped_column(String(64), default="")
-    skills: Mapped[str] = mapped_column(Text, default="[]")
-    weak_areas: Mapped[str] = mapped_column(Text, default="[]")
-    projects: Mapped[str] = mapped_column(Text, default="[]")
-    jd_text: Mapped[str] = mapped_column(Text, default="")
-    jd_analysis: Mapped[str] = mapped_column(Text, default="{}")
-    resume_text: Mapped[str] = mapped_column(Text, default="")
-    updated_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(timezone.utc))
-
-
-class InterviewReview(Base):
-    """面经复盘记录：原文 + 结构化复盘结果，供求职作战室回看。"""
-
-    __tablename__ = "interview_reviews"
-
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    profile_key: Mapped[str] = mapped_column(String(32), index=True)
-    source_text: Mapped[str] = mapped_column(Text, default="")
-    summary: Mapped[str] = mapped_column(Text, default="")
-    highlights: Mapped[str] = mapped_column(Text, default="[]")
-    weaknesses: Mapped[str] = mapped_column(Text, default="[]")
-    key_points: Mapped[str] = mapped_column(Text, default="[]")
-    action_plan: Mapped[str] = mapped_column(Text, default="[]")
-    created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(default=utcnow, index=True)
 
 
 def init_db() -> None:
     Base.metadata.create_all(bind=engine)
-    _migrate_columns()
-
-
-_MIGRATIONS: dict[str, list[tuple[str, str]]] = {
-    "interview_qa": [
-        ("difficulty", "INTEGER DEFAULT 0"),
-        ("competency", "VARCHAR(64) DEFAULT ''"),
-        ("rubric", "TEXT DEFAULT '[]'"),
-        ("seed_followups", "TEXT DEFAULT '[]'"),
-        ("answer_score", "INTEGER DEFAULT 0"),
-    ],
-    "interviews": [
-        ("plan", "TEXT DEFAULT ''"),
-        ("prep", "TEXT DEFAULT ''"),
-    ],
-    "user_profiles": [
-        ("jd_text", "TEXT DEFAULT ''"),
-        ("jd_analysis", "TEXT DEFAULT '{}'"),
-        ("resume_text", "TEXT DEFAULT ''"),
-    ],
-}
-
-
-def _migrate_columns() -> None:
-    """轻量迁移：为新表补充新列（幂等，重复调用安全）。"""
-    with engine.connect() as conn:
-        for table, columns in _MIGRATIONS.items():
-            existing = {row[1] for row in conn.execute(text(f"PRAGMA table_info({table})"))}
-            for name, ddl in columns:
-                if name not in existing:
-                    conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {ddl}"))
-        conn.commit()
 
 
 @contextmanager
