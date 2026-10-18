@@ -53,7 +53,7 @@ export default function LearnPage() {
   async function submit() {
     if (!quiz || !active) return;
     if (answers.some((a) => a < 0)) return;
-    const res = await api.submitQuiz(active.id, answers, quiz.answers);
+    const res = await api.submitQuiz(quiz.session_id, answers);
     setResult(res);
     refresh().catch(() => undefined);
   }
@@ -147,7 +147,7 @@ export default function LearnPage() {
                         <div className="mt-3 space-y-2">
                           {q.options.map((opt, oi) => {
                             const chosen = picked === oi;
-                            const correct = result && quiz.answers[qi] === oi;
+                            const correct = result && result.details[qi]?.correct_answer === oi;
                             const wrong = result && chosen && !correct;
                             return (
                               <button
@@ -178,7 +178,7 @@ export default function LearnPage() {
                         </div>
                         {result && (
                           <div className="mt-2 text-[12px] text-muted leading-relaxed pl-1">
-                            {quiz.explanations[qi] || "见原文对应小节。"}
+                            {result.details[qi]?.explanation || "见原文对应小节。"}
                           </div>
                         )}
                       </div>

@@ -12,13 +12,23 @@
 from .agent.loop import AgentLoop
 from .agent.memory import Memory
 from .agent.roles import COACH_PROMPT
+from .profile import profile_prompt
+from .runtime import user_scope
 from .tools import TOOL_FUNCTIONS, TOOLS
 
 
-def build_coach(memory: Memory | None = None) -> AgentLoop:
+def build_coach(memory: Memory | None = None, profile_text: str = "") -> AgentLoop:
+    """画像不是拼进用户消息，而是拼进系统提示词。
+
+    拼在用户消息里会随历史滚进上下文，越聊越长且容易被后续消息覆盖；
+    系统提示词每轮重建，画像变了立刻生效。
+    """
+    prompt = COACH_PROMPT
+    if profile_text:
+        prompt = f"{COACH_PROMPT}\n{profile_text}\n"
     return AgentLoop(
         name="培训教练",
-        system_prompt=COACH_PROMPT,
+        system_prompt=prompt,
         tools=TOOLS,
         tool_functions=TOOL_FUNCTIONS,
         memory=memory or Memory("coach-default", max_messages=20),
@@ -26,11 +36,12 @@ def build_coach(memory: Memory | None = None) -> AgentLoop:
     )
 
 
-def coach_stream(message: str, session_id: str):
+def coach_stream(message: str, session_id: str, employee: str = "local", audiences=None, profile_text: str = ""):
     """流式对话，事件格式与问答一致，前端可以复用同一套渲染。"""
-    coach = build_coach(Memory(session_id, max_messages=20))
-    for chunk in coach.chat_stream(message):
-        if chunk:
-            yield {"type": "token", "text": chunk}
-    yield {"type": "meta", "trace": coach.trace, "usage": coach.usage}
-    yield {"type": "done"}
+    with user_scope(employee, audiences):
+        coach = build_coach(Memory(session_id, max_messages=20), profile_text=profile_text)
+        for chunk in coach.chat_stream(message):
+            if chunk:
+                yield {"type": "token", "text": chunk}
+        yield {"type": "meta", "agent": "培训教练", "trace": coach.trace, "usage": coach.usage}
+        yield {"type": "done"}

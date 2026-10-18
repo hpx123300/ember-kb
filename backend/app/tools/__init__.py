@@ -4,13 +4,20 @@ import json
 
 from .. import training
 from ..agent.rag import knowledge_base
+from ..runtime import current_audiences, current_employee
 
 
 def search_knowledge(query: str = "", category: str = "") -> str:
     """检索公司知识库，返回带出处的章节片段。"""
-    results = knowledge_base.search(query or "公司制度", k=4, category=category or None)
+    # 权限来自请求上下文，不由模型决定——模型没有"要不要给他看"的判断权
+    results = knowledge_base.search(
+        query or "公司制度",
+        k=4,
+        category=category or None,
+        audiences=current_audiences(),
+    )
     if not results:
-        return "知识库中没有检索到相关内容"
+        return "知识库中没有检索到相关内容（也可能是不在当前账号的权限范围内）"
     payload = [
         {
             "title": r["title"],
@@ -38,7 +45,7 @@ def make_quiz(chapter: str = "", count: int = 3) -> str:
 
 def get_progress() -> str:
     """查看学习进度与薄弱章节。"""
-    data = training.mastery()
+    data = training.mastery(current_employee())
     summary = {
         "总章节": data["total_chapters"],
         "已学": data["studied"],

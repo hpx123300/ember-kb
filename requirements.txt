@@ -1,15 +1,22 @@
 # 大模型与 Agent
 openai>=1.35.0
 python-dotenv>=1.0
-# 可选编排引擎：AGENT_ENGINE=langgraph 时启用（graph.py）
-# 默认的 custom 引擎不依赖它，但测试要跑 LangGraph 分支，所以一并安装
+# 知识问答的状态图编排（flow.py：检索 → 判官 → 回答/拒答）
 langgraph>=1.0
-# LangGraph 的 SQLite 检查点：支持断点续答与人工介入后的恢复
+# 可选：需要「把图的状态存下来、重启后继续」时启用
 langgraph-checkpoint-sqlite>=3.0
+# MCP Server：把知识库挂给 OpenClaw / Claude Desktop 等外部智能体（mcp_server.py）
+mcp>=2.0
+
+# 身份与权限
+PyJWT>=2.8
 
 # 数据与检索（jieba 关键词检索兜底；向量检索见 requirements-rag.txt）
 jieba>=0.42
 sqlalchemy>=2.0
+alembic>=1.13
+# 生产换 MySQL 时装：pip install pymysql（代码层只改 DATABASE_URL）
+# pymysql>=1.1
 
 # 新版 Web 前端后端
 fastapi>=0.115
@@ -19,3 +26,4 @@ pypdf>=5.0
 
 # 测试
 pytest>=8.0
+httpx>=0.27

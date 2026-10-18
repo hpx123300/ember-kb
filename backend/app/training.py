@@ -5,22 +5,39 @@
 两份数据打架的经典问题。
 """
 
+import json
 import re
+import uuid
+from datetime import datetime, timezone
 
 from sqlalchemy import select
 
 from . import llm
 from .agent.rag import knowledge_base
-from .db import LearnRecord, get_session
+from .db import LearnRecord, QuizSession, get_session
 
 PASS_RATIO = 0.8  # 答对 80% 视为通过，和《培训课程目录》里的口径一致
 
 
-def list_chapters() -> list[dict]:
-    """把知识库文档聚成章节列表，附小节数与学习状态。"""
+def _visible(chunk: dict, audiences: set[str] | None) -> bool:
+    if audiences is None:
+        return True
+    meta = chunk.get("meta") or {}
+    tokens = {t.strip() for t in str(meta.get("audience", "")).split("/") if t.strip()}
+    return not tokens or bool(tokens & audiences)
+
+
+def list_chapters(audiences: set[str] | None = None) -> list[dict]:
+    """把知识库文档聚成章节列表，附小节数与学习状态。
+
+    audiences 决定"这个人能看到哪些章节"——销售不该在课程列表里
+    看到客服的处理口径，哪怕只是标题。
+    """
     knowledge_base.load()
     grouped: dict[str, dict] = {}
     for chunk in knowledge_base.chunks:
+        if not _visible(chunk, audiences):
+            continue
         source = chunk["source"]
         item = grouped.setdefault(
             source,
@@ -156,28 +173,106 @@ def _fallback_quiz(chunks: list[dict], count: int) -> list[dict]:
     return questions
 
 
-def submit_quiz(
+def create_quiz_session(
     chapter_id: str,
-    answers: list[int],
-    correct: list[int],
+    count: int = 5,
     employee: str = "local",
+    chapter_title: str = "",
 ) -> dict:
-    """判分并落库。只存分数，不存题目正文——题目由前端持有，服务端无需重复保存。"""
-    total = len(correct)
-    score = sum(1 for i, c in enumerate(correct) if i < len(answers) and answers[i] == c)
-    passed = total > 0 and score / total >= PASS_RATIO
+    """出一套题并开一次测验会话。
+
+    关键点：正确答案和解析只写进 quiz_sessions 表，响应里只有题干和选项。
+    旧版本把 correct 交给前端、提交时再传回来，改一个请求体就能拿满分——
+    培训数据一旦能刷，学情就没有任何意义。
+    """
+    questions = generate_quiz(chapter_id, count=count)
+    if not questions:
+        return {"session_id": "", "questions": [], "chapter": chapter_id, "count": 0}
+
+    session_id = uuid.uuid4().hex[:16]
     with get_session() as session:
+        session.add(
+            QuizSession(
+                id=session_id,
+                employee=employee,
+                chapter=chapter_id,
+                chapter_title=chapter_title or chapter_id,
+                questions=json.dumps(questions, ensure_ascii=False),
+                total=len(questions),
+                status="open",
+            )
+        )
+        session.commit()
+
+    return {
+        "session_id": session_id,
+        "chapter": chapter_id,
+        "chapter_title": chapter_title or chapter_id,
+        "count": len(questions),
+        # 只下发题干与选项，answer_index / explanation 留在服务端
+        "questions": [
+            {"question": q["question"], "options": q["options"], "knowledge_point": q.get("knowledge_point", "")}
+            for q in questions
+        ],
+    }
+
+
+def submit_quiz_session(session_id: str, answers: list[int], employee: str = "local") -> dict:
+    """按会话判分。答案从库里取，前端传什么都不影响对错。"""
+    with get_session() as session:
+        record = session.get(QuizSession, session_id)
+        if record is None:
+            raise ValueError("测验不存在或已过期")
+        if record.employee != employee:
+            raise ValueError("这不是你的测验")
+        if record.status != "open":
+            raise ValueError("这套题已经提交过了")
+
+        questions = json.loads(record.questions or "[]")
+        correct = [int(q.get("answer_index", -1)) for q in questions]
+        total = len(correct)
+        details = []
+        score = 0
+        for i, expected in enumerate(correct):
+            given = answers[i] if i < len(answers) else -1
+            ok = given == expected
+            score += int(ok)
+            details.append(
+                {
+                    "index": i,
+                    "your_answer": given,
+                    "correct_answer": expected,
+                    "ok": ok,
+                    "explanation": questions[i].get("explanation", ""),
+                }
+            )
+
+        passed = total > 0 and score / total >= PASS_RATIO
+        record.answers = json.dumps(answers[:total])
+        record.score = score
+        record.passed = passed
+        record.status = "submitted"
+        record.submitted_at = datetime.now(timezone.utc)
+
         session.add(
             LearnRecord(
                 employee=employee,
-                chapter=chapter_id,
+                chapter=record.chapter,
                 score=score,
                 total=total,
                 passed=passed,
             )
         )
         session.commit()
-    return {"score": score, "total": total, "passed": passed, "ratio": round(score / max(total, 1), 2)}
+
+    return {
+        "score": score,
+        "total": total,
+        "passed": passed,
+        "ratio": round(score / max(total, 1), 2),
+        "pass_ratio": PASS_RATIO,
+        "details": details,
+    }
 
 
 def mastery(employee: str = "local") -> dict:

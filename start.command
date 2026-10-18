@@ -23,7 +23,11 @@ if ! grep -q "^DEEPSEEK_API_KEY=.\+" .env 2>/dev/null; then
   echo "但 AI 功能需要填写 Key 后重新运行本文件才能使用。"
 fi
 
-# 3. 构建前端（首次或 dist 缺失时）
+# 3. 数据库迁移（每次启动都跑，Alembic 幂等：已是 head 就什么都不做）
+echo "检查数据库迁移..."
+.venv/bin/alembic upgrade head || { echo "数据库迁移失败，请查看上方报错"; exit 1; }
+
+# 4. 构建前端（首次或 dist 缺失时）
 if [ ! -f "web/dist/index.html" ]; then
   echo "首次运行：安装前端依赖并构建（需要 Node.js，约 1-2 分钟）..."
   cd web || exit 1

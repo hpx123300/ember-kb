@@ -18,6 +18,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import select
 
 from .db import LLMCall, ToolCall, get_session
+from .observability import current_trace_id
 
 logger = logging.getLogger("agent.metrics")
 
@@ -56,6 +57,7 @@ def record_llm_call(
         with get_session() as session:
             session.add(
                 LLMCall(
+                    trace_id=current_trace_id(),
                     session_id=session_id or "",
                     role=role or "",
                     model=model or "",
@@ -82,6 +84,7 @@ def record_tool_call(
         with get_session() as session:
             session.add(
                 ToolCall(
+                    trace_id=current_trace_id(),
                     session_id=session_id or "",
                     role=role or "",
                     tool=tool or "",

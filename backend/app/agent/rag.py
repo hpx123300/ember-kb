@@ -265,17 +265,25 @@ class KnowledgeBase:
         scored.sort(key=lambda x: -x[0])
         return [dict(c, score=round(float(s), 4)) for s, c in scored[:k]]
 
-    def _allowed_indexes(self, category: str | None) -> list[int]:
-        """按类别圈定候选块。先过滤再打分，是"不串部门"的关键——
+    def _allowed_indexes(self, category: str | None, audiences: set[str] | None = None) -> list[int]:
+        """按类别与受众圈定候选块。先过滤再打分，是"不串部门"的关键——
         打完分再筛会丢掉本该命中的同类结果，而语料越多越明显。
+
+        audiences 为 None 表示不过滤（管理员）；否则文档的 audience 字段
+        只要命中其中一个受众就可见，例如「客服/交付」对客服部可见。
         """
-        if not category:
-            return list(range(len(self.chunks)))
-        return [
-            i
-            for i, c in enumerate(self.chunks)
-            if (c.get("meta") or {}).get("category") == category
-        ]
+        allowed: list[int] = []
+        for i, chunk in enumerate(self.chunks):
+            meta = chunk.get("meta") or {}
+            if category and meta.get("category") != category:
+                continue
+            if audiences is not None:
+                tokens = {t.strip() for t in str(meta.get("audience", "")).split("/") if t.strip()}
+                # 没写 audience 的文档按"全员"处理，否则新上传的文件会谁都看不见
+                if tokens and not (tokens & audiences):
+                    continue
+            allowed.append(i)
+        return allowed
 
     @staticmethod
     def _rrf_merge(ranked_lists: list[list[dict]], k: int = RAG_RRF_K) -> list[dict]:
@@ -296,16 +304,25 @@ class KnowledgeBase:
             item.pop("ranks", None)
         return merged
 
-    def search(self, query: str, k: int = 4, category: str | None = None) -> list[dict]:
+    def search(
+        self,
+        query: str,
+        k: int = 4,
+        category: str | None = None,
+        audiences: set[str] | None = None,
+    ) -> list[dict]:
         """检索相关章节。
 
         category 为空表示全库检索；指定后只在该类别内召回，
         用于"销售问销售、客服问客服"的场景，避免跨部门串答案。
+
+        audiences 是权限边界：不在范围内的文档在打分之前就被排除，
+        所以即使问法命中了关键词，也召不回没有权限的段落。
         """
         self.load()
         if not self.chunks:
             return []
-        allowed = self._allowed_indexes(category)
+        allowed = self._allowed_indexes(category, audiences)
         if not allowed:
             return []
         keyword = self._keyword_search(query, k=max(k, 6), allowed=allowed)

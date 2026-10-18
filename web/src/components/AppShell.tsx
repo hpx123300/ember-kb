@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
-import { BookOpen, Compass, Flame, Library } from "lucide-react";
+import { BookOpen, Compass, Flame, Library, LogOut } from "lucide-react";
+import type { User } from "../lib/types";
 
 export type PageKey = "ask" | "learn" | "insights" | "library";
 
@@ -20,10 +21,14 @@ const TITLES: Record<PageKey, { eyebrow: string; title: string; desc: string }> 
 export default function AppShell({
   page,
   onNavigate,
+  user,
+  onLogout,
   children,
 }: {
   page: PageKey;
   onNavigate: (p: PageKey) => void;
+  user: User;
+  onLogout: () => void;
   children: ReactNode;
 }) {
   const meta = TITLES[page];
@@ -64,9 +69,27 @@ export default function AppShell({
           })}
         </nav>
 
-        <div className="mt-auto px-2 pt-8 space-y-1.5">
+        <div className="mt-auto px-2 pt-8 space-y-2.5">
+          <div className="flex items-center justify-between">
+            <div className="min-w-0">
+              <div className="text-[12px] text-ink truncate">{user.name || user.username}</div>
+              <div className="text-[10.5px] text-faint">
+                {user.department} · {user.role === "admin" ? "管理员" : "员工"}
+              </div>
+            </div>
+            <button
+              onClick={onLogout}
+              title="退出登录"
+              className="p-1.5 rounded-md text-faint hover:text-ink hover:bg-panel transition-colors"
+            >
+              <LogOut size={13} />
+            </button>
+          </div>
+          <div className="h-px bg-line" />
           <div className="text-[10.5px] leading-relaxed text-faint">知识库 · 本地部署</div>
-          <div className="text-[10.5px] leading-relaxed text-faint">数据不出内网，回答只依据资料</div>
+          <div className="text-[10.5px] leading-relaxed text-faint">
+            可见范围：{user.audiences.includes("*") ? "全部资料" : user.audiences.filter((a) => a !== "新员工").join(" / ")}
+          </div>
         </div>
       </aside>
 

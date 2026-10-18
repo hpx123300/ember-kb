@@ -28,6 +28,19 @@ KNOWLEDGE_DIR = DATA_DIR / "knowledge"
 DB_PATH = Path(os.getenv("EMBER_DB_PATH", str(DATA_DIR / "ember.db")))
 RAG_INDEX_DIR = DATA_DIR / "rag_index"
 
+# 数据库连接：默认 SQLite 文件；生产直接给 DATABASE_URL（如 mysql+pymysql://...）
+# 代码层只认这一个变量，切库不用改任何业务代码。
+DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{DB_PATH}")
+
+# 鉴权：签发 HS256 JWT。生产必须设置 EMBER_JWT_SECRET，否则重启即失效。
+JWT_SECRET = os.getenv("EMBER_JWT_SECRET", "ember-dev-secret-change-me-in-production-0123456789")
+JWT_ALGORITHM = "HS256"
+TOKEN_TTL_HOURS = int(os.getenv("EMBER_TOKEN_TTL_HOURS", "12"))
+
+# 演示账号（首次启动时自动创建，密码只在没有同名用户时写入）
+DEFAULT_ADMIN = os.getenv("EMBER_ADMIN_USER", "admin")
+DEFAULT_ADMIN_PASSWORD = os.getenv("EMBER_ADMIN_PASSWORD", "admin12345")
+
 
 def ensure_dirs() -> None:
     for d in (DATA_DIR, KNOWLEDGE_DIR, RAG_INDEX_DIR):

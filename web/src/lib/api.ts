@@ -1,5 +1,6 @@
 import type {
   AskMeta,
+  AssistantReply,
   Chapter,
   Doc,
   LibStats,
@@ -7,13 +8,50 @@ import type {
   Metrics,
   Quiz,
   QuizResult,
+  Trace,
+  User,
 } from "./types";
 
+const TOKEN_KEY = "ember_token";
+
+export function getToken(): string | null {
+  try {
+    return localStorage.getItem(TOKEN_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function setToken(token: string | null): void {
+  try {
+    if (token) localStorage.setItem(TOKEN_KEY, token);
+    else localStorage.removeItem(TOKEN_KEY);
+  } catch {
+    /* 隐私模式下 localStorage 可能不可用，登录态就退化成仅本次会话 */
+  }
+}
+
+/** 凭证失效时广播，由 App 统一踢回登录页——各个页面不用各写一遍跳转。 */
+function notifyExpired(): void {
+  setToken(null);
+  window.dispatchEvent(new Event("ember:logout"));
+}
+
+function headers(extra?: HeadersInit): HeadersInit {
+  const token = getToken();
+  return {
+    "Content-Type": "application/json",
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...(extra || {}),
+  };
+}
+
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(url, {
-    headers: { "Content-Type": "application/json", ...(init?.headers || {}) },
-    ...init,
-  });
+  const res = await fetch(url, { headers: headers(init?.headers), ...init });
+  if (res.status === 401) {
+    notifyExpired();
+    throw new Error("登录已失效，请重新登录");
+  }
   const data = await res.json().catch(() => null);
   if (!res.ok) {
     throw new Error(data?.error || data?.detail || `请求失败（${res.status}）`);
@@ -35,10 +73,14 @@ async function consumeSSE(
 ): Promise<void> {
   const res = await fetch(url, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: headers(),
     body: JSON.stringify(body),
     signal,
   });
+  if (res.status === 401) {
+    notifyExpired();
+    throw new Error("登录已失效，请重新登录");
+  }
   if (!res.ok || !res.body) throw new Error(`请求失败（${res.status}）`);
 
   const reader = res.body.getReader();
@@ -67,6 +109,13 @@ async function consumeSSE(
 }
 
 export const api = {
+  login: (username: string, password: string) =>
+    request<{ token: string; user: User }>("/api/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ username, password }),
+    }),
+  me: () => request<User>("/api/auth/me"),
+
   ask: (question: string, category: string, handlers: AskHandlers, signal?: AbortSignal) =>
     consumeSSE(
       "/api/ask",
@@ -77,6 +126,13 @@ export const api = {
       },
       signal,
     ),
+
+  /** 多 Agent 协作：由调度员决定找知识库、教练还是学情。 */
+  assistant: (question: string) =>
+    request<AssistantReply>("/api/assistant", {
+      method: "POST",
+      body: JSON.stringify({ question }),
+    }),
 
   coach: (
     message: string,
@@ -94,10 +150,11 @@ export const api = {
   chapters: () => request<Chapter[]>("/api/chapters"),
   quiz: (chapter: string, count = 5) =>
     request<Quiz>("/api/quiz", { method: "POST", body: JSON.stringify({ chapter, count }) }),
-  submitQuiz: (chapter: string, answers: number[], correct: number[]) =>
+  /** 只提交作答；标准答案在服务端，客户端拿不到也改不了。 */
+  submitQuiz: (sessionId: string, answers: number[]) =>
     request<QuizResult>("/api/quiz/submit", {
       method: "POST",
-      body: JSON.stringify({ chapter, answers, correct }),
+      body: JSON.stringify({ session_id: sessionId, answers }),
     }),
   mastery: () => request<Mastery>("/api/mastery"),
 
@@ -114,6 +171,8 @@ export const api = {
     }),
 
   metrics: (days = 7) => request<Metrics>(`/api/metrics?days=${days}`),
+  traces: (limit = 20) => request<Trace[]>(`/api/traces?limit=${limit}`),
+  trace: (id: string) => request<Trace>(`/api/traces/${id}`),
 };
 
 export function newSessionId(): string {

@@ -44,24 +44,72 @@ def test_quiz_falls_back_when_llm_fails(monkeypatch):
     assert all(q["options"] for q in questions)
 
 
-def test_submit_scores_and_records():
+def _fake_questions(monkeypatch, count=4):
+    """固定一套题，避免测试依赖模型输出。"""
+    items = [
+        {
+            "question": f"题 {i + 1}",
+            "options": ["A", "B", "C", "D"],
+            "answer_index": i % 4,
+            "explanation": "见原文",
+            "knowledge_point": "小节",
+        }
+        for i in range(count)
+    ]
+    monkeypatch.setattr(
+        "backend.app.training.llm.chat_json",
+        lambda prompt, system, temperature=0.2, **kw: {"questions": items},
+    )
+
+
+def test_quiz_response_never_leaks_answers(monkeypatch):
+    """下发给前端的题不能带 answer_index —— 带了就等于把答案给了客户端。"""
+    _fake_questions(monkeypatch, 4)
+    data = training.create_quiz_session("handbook-attendance.md", 4, employee="leak-user")
+    assert data["session_id"]
+    assert len(data["questions"]) == 4
+    for q in data["questions"]:
+        assert "answer_index" not in q
+        assert "explanation" not in q
+
+
+def test_submit_scores_and_records(monkeypatch):
     """判分与通过线：答对 80% 及以上算通过，正好压在边界上也要对。"""
-    result = training.submit_quiz("handbook-attendance.md", [0, 1, 0, 3], [0, 1, 0, 3], employee="test-user")
+    _fake_questions(monkeypatch, 4)
+    session = training.create_quiz_session("handbook-attendance.md", 4, employee="test-user")
+    result = training.submit_quiz_session(session["session_id"], [0, 1, 2, 3], employee="test-user")
     assert result["score"] == 4
     assert result["total"] == 4
     assert result["passed"] is True
 
-    borderline = training.submit_quiz(
-        "handbook-attendance.md", [0, 1, 2, 3, 9], [0, 1, 0, 3, 9], employee="test-user"
-    )
-    assert borderline["score"] == 4
-    assert borderline["passed"] is True  # 4/5 = 80%，刚好达到通过线
+    _fake_questions(monkeypatch, 5)
+    borderline = training.create_quiz_session("handbook-attendance.md", 5, employee="test-user")
+    outcome = training.submit_quiz_session(borderline["session_id"], [0, 1, 2, 3, 9], employee="test-user")
+    assert outcome["score"] == 4
+    assert outcome["passed"] is True  # 4/5 = 80%，刚好达到通过线
 
 
-def test_mastery_uses_best_score():
+def test_quiz_is_single_use_and_owner_only(monkeypatch):
+    """一套题只能交一次，别人也交不了——否则可以把别人的成绩刷掉。"""
+    _fake_questions(monkeypatch, 3)
+    session = training.create_quiz_session("handbook-expense.md", 3, employee="alice")
+    with pytest.raises(ValueError):
+        training.submit_quiz_session(session["session_id"], [0, 0, 0], employee="bob")
+    training.submit_quiz_session(session["session_id"], [0, 1, 2], employee="alice")
+    with pytest.raises(ValueError):
+        training.submit_quiz_session(session["session_id"], [0, 1, 2], employee="alice")
+
+
+def test_mastery_uses_best_score(monkeypatch):
     """考两次取最好成绩：培训目标是掌握，不是平均。"""
-    training.submit_quiz("security-policy.md", [0, 0], [0, 1], employee="mastery-user")  # 50%
-    training.submit_quiz("security-policy.md", [0, 1], [0, 1], employee="mastery-user")  # 100%
+    _fake_questions(monkeypatch, 2)
+    first = training.create_quiz_session("security-policy.md", 2, employee="mastery-user")
+    training.submit_quiz_session(first["session_id"], [0, 0], employee="mastery-user")  # 50%
+
+    _fake_questions(monkeypatch, 2)
+    second = training.create_quiz_session("security-policy.md", 2, employee="mastery-user")
+    training.submit_quiz_session(second["session_id"], [0, 1], employee="mastery-user")  # 100%
+
     data = training.mastery("mastery-user")
     row = next(c for c in data["chapters"] if c["chapter"] == "security-policy.md")
     assert row["attempts"] == 2

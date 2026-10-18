@@ -12,6 +12,7 @@
 """
 
 import re
+import time
 from typing import TypedDict
 
 from langgraph.config import get_stream_writer
@@ -19,6 +20,7 @@ from langgraph.graph import END, StateGraph
 
 from . import llm
 from .agent.rag import knowledge_base
+from .observability import TraceRecorder, record_step
 
 # 覆盖率只用于兜底：判官模型不可用时，用 0.5 这个偏保守的线决定答还是拒。
 # 正常路径下由 judge 节点判断，覆盖率只作为观测指标记录。
@@ -50,6 +52,7 @@ ANSWER_SYSTEM = """你是企业知识助手，只根据给定资料回答，不�
 class AskState(TypedDict, total=False):
     question: str
     category: str
+    audiences: list[str] | None
     chunks: list[dict]
     coverage: float
     refused: bool
@@ -136,9 +139,17 @@ def _extract_citations(answer: str, chunks: list[dict]) -> list[dict]:
 
 
 def _retrieve_node(state: AskState) -> AskState:
+    started = time.perf_counter()
     question = state["question"]
-    chunks = knowledge_base.search(question, k=5, category=state.get("category") or None)
+    audiences = state.get("audiences")
+    chunks = knowledge_base.search(
+        question,
+        k=5,
+        category=state.get("category") or None,
+        audiences=set(audiences) if audiences is not None else None,
+    )
     cov = coverage(question, chunks)
+    record_step("retrieve", int((time.perf_counter() - started) * 1000), detail=f"{len(chunks)} 段")
     return {"chunks": chunks, "coverage": cov}
 
 
@@ -162,14 +173,18 @@ def _judge_node(state: AskState) -> AskState:
     """
     chunks = state["chunks"]
     if not chunks:
+        record_step("judge", 0, detail="无候选，直接拒答")
         return {"refused": True}
     prompt = f"问题：{state['question']}\n\n资料：\n{_build_context(chunks)}"
+    started = time.perf_counter()
     try:
         verdict = llm.chat_json(prompt, JUDGE_SYSTEM, temperature=0.0, role="judge")
         can_answer = bool(verdict.get("can_answer"))
+        record_step("judge", int((time.perf_counter() - started) * 1000), detail="可答" if can_answer else "不足以答")
     except Exception:  # noqa: BLE001
         # 判官挂了不能把用户晾着：退回覆盖率兜底，阈值放高一点偏保守
         can_answer = state.get("coverage", 0) >= COVERAGE_FALLBACK
+        record_step("judge", int((time.perf_counter() - started) * 1000), ok=False, detail="判官不可用，用覆盖率兜底")
     return {"refused": not can_answer}
 
 
@@ -178,17 +193,21 @@ def _answer_node(state: AskState) -> AskState:
     prompt = f"资料：\n{_build_context(chunks)}\n\n问题：{state['question']}"
     writer = get_stream_writer()
     full = ""
+    started = time.perf_counter()
     for piece in llm.chat_text_stream(prompt, ANSWER_SYSTEM, temperature=0.2, role="answer"):
         full += piece
         writer(piece)
     answer = full.strip()
+    record_step("answer", int((time.perf_counter() - started) * 1000), detail=f"{len(chunks)} 段资料")
     citations = _extract_citations(answer, chunks)
 
     if not citations:
         # 没有引用等于没有依据。重试一次，把要求说得更死板一点；
         # 仍拿不到引用就把这次回答标记为不可信，交给前端提示。
         strict = f"{prompt}\n\n注意：每个结论后面必须标注来源编号，例如 [1]。"
+        retry_started = time.perf_counter()
         retry = llm.chat_text(strict, ANSWER_SYSTEM, temperature=0.0, role="answer-retry")
+        record_step("answer-retry", int((time.perf_counter() - retry_started) * 1000), detail="无引用")
         retry_citations = _extract_citations(retry, chunks)
         if retry_citations:
             writer(retry)
@@ -232,31 +251,47 @@ def build_flow():
 FLOW = build_flow()
 
 
-def ask_stream(question: str, category: str = ""):
-    """流式问答。事件序列：token* → meta（引用/拒答/覆盖率）→ done。"""
+def ask_stream(question: str, category: str = "", audiences: set[str] | None = None, user: str = ""):
+    """流式问答。事件序列：token* → meta（引用/拒答/覆盖率/trace_id）→ done。"""
     final: dict = {}
-    for mode, chunk in FLOW.stream(
-        {"question": question, "category": category},
-        stream_mode=["custom", "values"],
-    ):
-        if mode == "custom":
-            if chunk:
-                yield {"type": "token", "text": chunk}
-        else:
-            final = chunk
+    recorder = TraceRecorder("ask", user=user, question=question)
+    with recorder:
+        for mode, chunk in FLOW.stream(
+            {
+                "question": question,
+                "category": category,
+                # 权限范围随请求传入，节点里不再关心"谁是当前用户"
+                "audiences": list(audiences) if audiences is not None else None,
+            },
+            stream_mode=["custom", "values"],
+        ):
+            if mode == "custom":
+                if chunk:
+                    yield {"type": "token", "text": chunk}
+            else:
+                final = chunk
+        trace = recorder.finish(agent="知识问答", refused=bool(final.get("refused")))
 
     yield {
         "type": "meta",
         "refused": bool(final.get("refused")),
         "coverage": final.get("coverage", 0),
         "citations": final.get("citations", []),
+        "trace_id": trace["trace_id"],
+        "total_ms": trace["total_ms"],
     }
     yield {"type": "done"}
 
 
-def ask(question: str, category: str = "") -> dict:
-    """非流式版本，供评测与接口复用，保证和线上走同一条路径。"""
-    result = FLOW.invoke({"question": question, "category": category})
+def ask(question: str, category: str = "", audiences: set[str] | None = None) -> dict:
+    """非流式版本，供评测与 MCP 复用，保证和线上走同一条路径。"""
+    result = FLOW.invoke(
+        {
+            "question": question,
+            "category": category,
+            "audiences": list(audiences) if audiences is not None else None,
+        }
+    )
     return {
         "answer": result.get("answer", ""),
         "citations": result.get("citations", []),
