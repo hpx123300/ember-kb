@@ -34,7 +34,7 @@ def test_llm_call_accounting_and_cost():
     """记录两次调用后，token 与成本按单价正确累加。"""
     before = metrics.summary(days=1)
     metrics.record_llm_call(TEST_SESSION, "router", "deepseek-chat", 1_000_000, 0, 120)
-    metrics.record_llm_call(TEST_SESSION, "interviewer", "deepseek-chat", 0, 1_000_000, 800)
+    metrics.record_llm_call(TEST_SESSION, "知识助手", "deepseek-chat", 0, 1_000_000, 800)
     after = metrics.summary(days=1)
 
     assert _delta(before, after, "calls") == 2
@@ -45,7 +45,7 @@ def test_llm_call_accounting_and_cost():
     assert abs(_delta(before, after, "cost") - expected) < 1e-6
 
     assert after["by_role"]["router"]["calls"] >= 1
-    assert after["by_role"]["interviewer"]["avg_latency_ms"] >= 1
+    assert after["by_role"]["知识助手"]["avg_latency_ms"] >= 1
 
 
 def test_tool_success_rate_and_error_kept():

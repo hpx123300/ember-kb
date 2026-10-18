@@ -8,7 +8,7 @@ from backend.app import flow
 
 
 def _fake_stream(answer: str):
-    def fake(prompt, system, temperature=0.3):
+    def fake(prompt, system, temperature=0.3, **kwargs):
         yield answer
 
     return fake
@@ -18,7 +18,7 @@ def test_out_of_scope_question_is_refused(monkeypatch):
     """语料外问题必须拒答，且不调用模型——拒答判定在代码里，不靠模型自觉。"""
     called = {"n": 0}
 
-    def boom(prompt, system, temperature=0.3):
+    def boom(prompt, system, temperature=0.3, **kwargs):
         called["n"] += 1
         yield "不该被调用"
 
@@ -33,7 +33,7 @@ def test_in_scope_answer_keeps_citations(monkeypatch):
     """答案里的 [n] 要能映射回真实来源，映射不到的编号不返回。"""
     monkeypatch.setattr(
         "backend.app.flow.llm.chat_json",
-        lambda prompt, system, temperature=0.0: {"can_answer": True, "reason": "资料写了"},
+        lambda prompt, system, temperature=0.0, **kw: {"can_answer": True, "reason": "资料写了"},
     )
     monkeypatch.setattr(
         "backend.app.flow.llm.chat_text_stream",
@@ -49,7 +49,7 @@ def test_unknown_citation_index_is_dropped(monkeypatch):
     """模型编出 [9] 这类不存在的编号时，不能凭空造一条引用。"""
     monkeypatch.setattr(
         "backend.app.flow.llm.chat_json",
-        lambda prompt, system, temperature=0.0: {"can_answer": True, "reason": "资料写了"},
+        lambda prompt, system, temperature=0.0, **kw: {"can_answer": True, "reason": "资料写了"},
     )
     monkeypatch.setattr(
         "backend.app.flow.llm.chat_text_stream",
@@ -78,7 +78,7 @@ def test_category_is_respected(monkeypatch):
     """指定类别后，引用只能来自该类别。"""
     monkeypatch.setattr(
         "backend.app.flow.llm.chat_json",
-        lambda prompt, system, temperature=0.0: {"can_answer": True, "reason": "资料写了"},
+        lambda prompt, system, temperature=0.0, **kw: {"can_answer": True, "reason": "资料写了"},
     )
     monkeypatch.setattr(
         "backend.app.flow.llm.chat_text_stream",
@@ -93,7 +93,7 @@ def test_judge_can_refuse_even_with_high_coverage(monkeypatch):
     """关键词沾边但资料答不了时，判官要能拦下来——这是「竞争对手定价」那类题。"""
     monkeypatch.setattr(
         "backend.app.flow.llm.chat_json",
-        lambda prompt, system, temperature=0.0: {"can_answer": False, "reason": "资料是自家产品，不是竞争对手"},
+        lambda prompt, system, temperature=0.0, **kw: {"can_answer": False, "reason": "资料是自家产品，不是竞争对手"},
     )
     monkeypatch.setattr("backend.app.flow.llm.chat_text_stream", _fake_stream("不该出现"))
     result = flow.ask("竞争对手的产品定价是多少？")

@@ -86,7 +86,7 @@ def generate_quiz(chapter_id: str, count: int = 5) -> list[dict]:
 只输出 JSON：{{"questions": [{{"question": "题干", "options": ["A选项","B选项","C选项","D选项"], "answer_index": 0, "explanation": "为什么选它，引用原文要点", "knowledge_point": "对应小节标题"}}]}}
 """
     try:
-        raw = llm.chat_json(prompt, "你是企业培训出题老师，只根据给定资料出题，不出资料外的内容。")
+        raw = llm.chat_json(prompt, "你是企业培训出题老师，只根据给定资料出题，不出资料外的内容。", role="quiz")
         questions = _validate_quiz(raw)
         if questions:
             return questions[:count]

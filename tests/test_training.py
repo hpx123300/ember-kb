@@ -17,7 +17,7 @@ def test_quiz_validation_drops_bad_items(monkeypatch):
     """模型返回的脏题要丢掉：缺字段、答案越界、选项重复都不能下发给前端。"""
     monkeypatch.setattr(
         "backend.app.training.llm.chat_json",
-        lambda prompt, system, temperature=0.2: {
+        lambda prompt, system, temperature=0.2, **kw: {
             "questions": [
                 {"question": "年假满 1 年几天？", "options": ["5", "7", "10", "3"], "answer_index": 0,
                  "explanation": "原文写明 5 天", "knowledge_point": "年假"},
@@ -35,7 +35,7 @@ def test_quiz_validation_drops_bad_items(monkeypatch):
 def test_quiz_falls_back_when_llm_fails(monkeypatch):
     """模型不可用时退化为挖空题，培训流程不能因为一次 API 失败而中断。"""
 
-    def boom(prompt, system, temperature=0.2):
+    def boom(prompt, system, temperature=0.2, **kw):
         raise RuntimeError("api down")
 
     monkeypatch.setattr("backend.app.training.llm.chat_json", boom)

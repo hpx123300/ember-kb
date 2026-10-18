@@ -17,8 +17,8 @@ sys.path.insert(0, str(PROJECT_ROOT))
 # 必须在 import backend.app.* 之前设置：config.py 在导入时就会读这些变量。
 # 这里用强制赋值而不是 setdefault——测试必须和开发库彻底隔离，
 # 不能因为 shell 里恰好设过同名变量就写回真实库。
-_TMP_DIR = Path(tempfile.mkdtemp(prefix="interview-test-"))
-os.environ["EMBER_DB_PATH"] = str(_TMP_DIR / "interview.db")
+_TMP_DIR = Path(tempfile.mkdtemp(prefix="ember-test-"))
+os.environ["EMBER_DB_PATH"] = str(_TMP_DIR / "ember.db")
 
 # CI / 无 .env 环境下也能跑：配置一个占位 Key（所有 LLM 调用均被 mock）
 os.environ.setdefault("DEEPSEEK_API_KEY", "test-dummy-key")

@@ -52,7 +52,7 @@ if lsof -nP -iTCP:8001 -sTCP:LISTEN >/dev/null 2>&1; then
 fi
 
 # 5. 后台启动 FastAPI 服务
-echo "正在启动 AI 面试智能系统（新版界面），请稍候…"
+echo "正在启动 薪火 Ember，请稍候…"
 .venv/bin/uvicorn server.main:app --host 127.0.0.1 --port 8001 &
 SERVER_PID=$!
 

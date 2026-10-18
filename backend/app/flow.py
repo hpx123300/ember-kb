@@ -165,7 +165,7 @@ def _judge_node(state: AskState) -> AskState:
         return {"refused": True}
     prompt = f"问题：{state['question']}\n\n资料：\n{_build_context(chunks)}"
     try:
-        verdict = llm.chat_json(prompt, JUDGE_SYSTEM, temperature=0.0)
+        verdict = llm.chat_json(prompt, JUDGE_SYSTEM, temperature=0.0, role="judge")
         can_answer = bool(verdict.get("can_answer"))
     except Exception:  # noqa: BLE001
         # 判官挂了不能把用户晾着：退回覆盖率兜底，阈值放高一点偏保守
@@ -178,7 +178,7 @@ def _answer_node(state: AskState) -> AskState:
     prompt = f"资料：\n{_build_context(chunks)}\n\n问题：{state['question']}"
     writer = get_stream_writer()
     full = ""
-    for piece in llm.chat_text_stream(prompt, ANSWER_SYSTEM, temperature=0.2):
+    for piece in llm.chat_text_stream(prompt, ANSWER_SYSTEM, temperature=0.2, role="answer"):
         full += piece
         writer(piece)
     answer = full.strip()
@@ -188,7 +188,7 @@ def _answer_node(state: AskState) -> AskState:
         # 没有引用等于没有依据。重试一次，把要求说得更死板一点；
         # 仍拿不到引用就把这次回答标记为不可信，交给前端提示。
         strict = f"{prompt}\n\n注意：每个结论后面必须标注来源编号，例如 [1]。"
-        retry = llm.chat_text(strict, ANSWER_SYSTEM, temperature=0.0)
+        retry = llm.chat_text(strict, ANSWER_SYSTEM, temperature=0.0, role="answer-retry")
         retry_citations = _extract_citations(retry, chunks)
         if retry_citations:
             writer(retry)
