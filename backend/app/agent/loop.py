@@ -27,6 +27,22 @@ class AgentError(Exception):
     pass
 
 
+def _result_flags(result: str) -> dict:
+    """从工具返回里抽出可统计的信号。
+
+    不解析完整 JSON：工具的返回有 list、dict、纯文本几种历史形态，
+    解析会在某一种上炸掉，而评测只关心「这次调用是不是白跑」。
+    代价是子串判断比较粗，所以字段名取窄一点，避免误判。
+    """
+    text = result or ""
+    return {
+        "empty": '"results": []' in text or "没有命中" in text or "没有检索到" in text,
+        "degraded": '"degraded": "' in text and '"degraded": null' not in text,
+        "failed": text.startswith("错误") or text.startswith("工具执行失败"),
+    }
+
+
+
 class AgentLoop:
     def __init__(
         self,
@@ -50,6 +66,10 @@ class AgentLoop:
         self.client = OpenAI(api_key=DEEPSEEK_API_KEY, base_url=DEEPSEEK_BASE_URL)
         self.model = DEEPSEEK_MODEL
         self.trace: list[dict] = []
+        # 结构化轨迹：trace 是给人看的字符串，tool_events 是给评测看的记录。
+        # 两者都要，因为「人读得懂」和「程序数得清」是同一条链路的两种用途。
+        self.tool_events: list[dict] = []
+        self.fallback_used = False
         # 观测用：把会话与角色带到指标层，才能回答「哪个角色最贵、哪个工具最慢」
         self.session_id = getattr(self.memory, "session_id", "") or ""
         self.role = name
@@ -115,6 +135,25 @@ class AgentLoop:
             stream_options={"include_usage": True},
         )
 
+    def _log_tool_event(self, name: str, arguments: dict, result: str, latency_ms: int, ok: bool) -> None:
+        """记一条结构化工具事件。
+
+        评测脚本靠它算「选对工具没有、有没有重复调用、有没有白跑」。
+        在工具层就记，而不是事后从 trace 字符串里正则抠——抠出来的东西
+        一旦日志措辞改了就会静默失效。
+        """
+        flags = _result_flags(result)
+        self.tool_events.append(
+            {
+                "tool": name,
+                "arguments": arguments,
+                "ok": ok,
+                "latency_ms": latency_ms,
+                "result_chars": len(result or ""),
+                **flags,
+            }
+        )
+
     def _execute_tool(self, tool_call) -> str:
         name = tool_call.function.name
         try:
@@ -124,22 +163,29 @@ class AgentLoop:
         func: Callable | None = self.tool_functions.get(name)
         if func is None:
             # 未知工具也要记一笔：它通常意味着模型在幻觉工具名
+            message = f"错误：未知工具 {name}"
             metrics.record_tool_call(self.session_id, self.role, name or "unknown", False, 0, "未知工具")
-            return f"错误：未知工具 {name}"
+            self._log_tool_event(name or "unknown", arguments, message, 0, False)
+            return message
         started = time.perf_counter()
         try:
             result = func(**arguments)
             latency_ms = int((time.perf_counter() - started) * 1000)
             metrics.record_tool_call(self.session_id, self.role, name, True, latency_ms)
             self._record("tool", f"{name}({json.dumps(arguments, ensure_ascii=False)}) -> {result}")
+            self._log_tool_event(name, arguments, result, latency_ms, True)
             return result
         except Exception as exc:
             latency_ms = int((time.perf_counter() - started) * 1000)
+            message = f"工具执行失败：{exc}"
             metrics.record_tool_call(self.session_id, self.role, name, False, latency_ms, str(exc))
-            return f"工具执行失败：{exc}"
+            self._log_tool_event(name, arguments, message, latency_ms, False)
+            return message
 
     def chat(self, user_message: str, on_tool: Callable[[str], None] | None = None) -> tuple[str, list[dict]]:
         self.trace = []
+        self.tool_events = []
+        self.fallback_used = False
         self.usage = {"prompt_tokens": 0, "completion_tokens": 0, "latency_ms": 0}
         self.memory.add({"role": "user", "content": user_message})
         messages = self._build_messages()
@@ -158,6 +204,7 @@ class AgentLoop:
                 result = self._execute_tool(tool_call)
                 self.memory.add({"role": "tool", "tool_call_id": tool_call.id, "content": result})
             messages = self._build_messages()
+        self.fallback_used = True
         reply = self._fallback_reply()
         self.memory.add({"role": "assistant", "content": reply})
         self._record("answer", reply)
@@ -166,6 +213,8 @@ class AgentLoop:
     def chat_stream(self, user_message: str, on_tool: Callable[[str], None] | None = None):
         """流式版：工具调用轮不产出文本，最终回答逐块 yield。"""
         self.trace = []
+        self.tool_events = []
+        self.fallback_used = False
         self.usage = {"prompt_tokens": 0, "completion_tokens": 0, "latency_ms": 0}
         self.memory.add({"role": "user", "content": user_message})
         messages = self._build_messages()
@@ -223,6 +272,7 @@ class AgentLoop:
                 result = self._execute_tool(tc)
                 self.memory.add({"role": "tool", "tool_call_id": tc.id, "content": result})
             messages = self._build_messages()
+        self.fallback_used = True
         reply = self._fallback_reply()
         self.memory.add({"role": "assistant", "content": reply})
         self._record("answer", reply)

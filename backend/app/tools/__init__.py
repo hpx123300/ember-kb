@@ -1,23 +1,92 @@
-"""工具注册中心：培训教练可调用的工具都在这里声明（JSON Schema + 实现）。"""
+"""工具注册中心：培训教练可调用的工具都在这里声明（JSON Schema + 实现）。
+
+工具返回值统一是 JSON 字符串，形状固定为 `{"results": [...], "degraded": ...}`
+或 `{"results": [], "hint": ...}`。为什么要定契约：模型读工具结果的方式是
+「猜这段文本里哪个是数据」，形状一变它就可能在下一轮把提示语当数据处理。
+固定字段名比固定文案更可靠。
+
+`degraded` 不为空，说明这次结果是降级路径拿到的（放宽类别、换关键词）。
+把它显式返回给模型，而不是偷偷兜底，是因为模型需要知道"这条答案的来源比平时弱"，
+才能在回答里带上保留语气。
+"""
 
 import json
+import re
 
 from .. import training
 from ..agent.rag import knowledge_base
 from ..runtime import current_audiences, current_employee
 
+# 问句里的虚词与疑问成分：参与检索只会让 BM25 的候选变脏，不带来召回
+_QUERY_NOISE = {
+    "请问", "我想", "想知道", "帮我", "看看", "查一下", "说一下", "问一下",
+    "是什么", "是多少", "有哪些", "怎么样", "怎么办", "为什么", "多少",
+    "可以", "能不能", "是否", "一下", "我们", "公司",
+}
+_SINGLE_CHAR_NOISE = set("的了是在有和与及吗呢啊吧呀哦嗯这那我你他她它")
+
+
+def _keywords_only(text: str) -> str:
+    """把整句压成关键词串。
+
+    为什么在工具里做，而不是让模型自己想「换个说法再查」：
+    模型未必会重试，重试也未必换得对；这是兜底路径，必须在代码里确定地发生。
+    用 jieba 的搜索模式，能把「年假有几天」拆出「年假」这种领域词。
+    """
+    try:
+        import jieba
+
+        tokens = [t.strip() for t in jieba.lcut_for_search(text)]
+    except Exception:  # noqa: BLE001
+        tokens = [t for t in re.split(r"[\s，。；、？！,.;?!]+", text) if t]
+
+    words: list[str] = []
+    for token in tokens:
+        if not token or token in _QUERY_NOISE:
+            continue
+        if len(token) == 1 and (token in _SINGLE_CHAR_NOISE or not re.fullmatch(r"[\u4e00-\u9fa5]", token)):
+            continue
+        if len(token) >= 2 and token not in words:
+            words.append(token)
+    return " ".join(words[:8]) or text
+
 
 def search_knowledge(query: str = "", category: str = "") -> str:
-    """检索公司知识库，返回带出处的章节片段。"""
+    """检索公司知识库，返回带出处的章节片段。
+
+    检索本身可能空手而归，这里有三段降级，按代价从低到高：
+    1. 原样检索（带模型给的类别）；
+    2. 类别下没命中 -> 放宽到全库（模型经常把类别猜错）；
+    3. 仍然没有 -> 把问句压成关键词再查一次（分词错误或虚词太多）。
+    三步都空才认输，并把 hint 交给模型，让它换个说法，而不是拿空结果去编。
+    """
     # 权限来自请求上下文，不由模型决定——模型没有"要不要给他看"的判断权
-    results = knowledge_base.search(
-        query or "公司制度",
-        k=4,
-        category=category or None,
-        audiences=current_audiences(),
-    )
+    audiences = current_audiences()
+    text = query or "公司制度"
+
+    results = knowledge_base.search(text, k=4, category=category or None, audiences=audiences)
+    degraded = ""
+
+    if not results and category:
+        results = knowledge_base.search(text, k=4, category=None, audiences=audiences)
+        degraded = f"类别「{category}」下没有命中，已放宽到全库"
+
     if not results:
-        return "知识库中没有检索到相关内容（也可能是不在当前账号的权限范围内）"
+        rewritten = _keywords_only(text)
+        if rewritten and rewritten != text:
+            results = knowledge_base.search(rewritten, k=4, category=None, audiences=audiences)
+            degraded = f"原句未命中，已改用关键词「{rewritten}」重试"
+
+    if not results:
+        return json.dumps(
+            {
+                "results": [],
+                "hint": "没有命中。换用更具体的名词再查，或指定类别（制度 / 产品 / 销售 / 客服 / 培训）。"
+                        "如果确实不在知识库里，直接告诉用户没有，不要推测。",
+            },
+            ensure_ascii=False,
+        )
+
     payload = [
         {
             "title": r["title"],
@@ -27,7 +96,8 @@ def search_knowledge(query: str = "", category: str = "") -> str:
         }
         for r in results
     ]
-    return json.dumps(payload, ensure_ascii=False)
+    return json.dumps({"results": payload, "degraded": degraded or None}, ensure_ascii=False)
+
 
 
 def make_quiz(chapter: str = "", count: int = 3) -> str:
