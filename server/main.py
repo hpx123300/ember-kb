@@ -28,7 +28,7 @@ from pydantic import BaseModel, Field
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from backend.app import library, metrics, observability, supervisor, training  # noqa: E402
+from backend.app import actions, library, metrics, observability, supervisor, training  # noqa: E402
 from backend.app.agent.loop import AgentError  # noqa: E402
 from backend.app.agent.roles import PROMPT_VERSION  # noqa: E402
 from backend.app.auth import (  # noqa: E402
@@ -188,6 +188,26 @@ def coach_history(session_id: str, user: CurrentUser = Depends(get_current_user)
 def coach_history_clear(session_id: str, user: CurrentUser = Depends(get_current_user)):
     clear_messages(session_id)
     return {"ok": True}
+
+
+# ---------------- 待确认动作（Agent 写操作的闸门） ----------------
+@app.get("/api/actions")
+def list_actions(status: str = "", user: CurrentUser = Depends(get_current_user)):
+    """列出待确认动作。普通员工只看自己的，管理员看全部。"""
+    return actions.list_actions(user.employee_key, is_admin=user.is_admin, status=status)
+
+
+@app.post("/api/actions/{action_id}/approve")
+def approve_action(action_id: str, user: CurrentUser = Depends(get_current_user)):
+    """确认并执行。重复调用不会重复执行——前端多点两下是常态。"""
+    result = actions.approve(action_id, user.employee_key, is_admin=user.is_admin)
+    return JSONResponse(result, status_code=200 if result.get("ok") else 409)
+
+
+@app.post("/api/actions/{action_id}/reject")
+def reject_action(action_id: str, reason: str = "", user: CurrentUser = Depends(get_current_user)):
+    result = actions.reject(action_id, user.employee_key, reason=reason, is_admin=user.is_admin)
+    return JSONResponse(result, status_code=200 if result.get("ok") else 409)
 
 
 # ---------------- 培训 ----------------

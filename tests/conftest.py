@@ -26,3 +26,14 @@ os.environ.setdefault("DEEPSEEK_API_KEY", "test-dummy-key")
 from backend.app.db import init_db  # noqa: E402
 
 init_db()
+
+
+def pytest_configure(config):
+    """把 pytest 的临时根目录放到项目内。
+
+    默认在系统临时目录建 pytest-of-<user>，在受沙箱限制的环境里
+    这一步会被拒绝，表现为「单独跑能过、全量跑报 PermissionError」。
+    放到项目内既避开限制，也让清理更直观。
+    """
+    if not config.option.basetemp:
+        config.option.basetemp = str(PROJECT_ROOT / ".pytest_cache" / "tmp")

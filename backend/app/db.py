@@ -155,6 +155,47 @@ class Trace(Base):
     created_at: Mapped[datetime] = mapped_column(default=utcnow, index=True)
 
 
+class PendingAction(Base):
+    """Agent 提议、等人确认的写操作。
+
+    为什么单独建表而不是塞进 chat_messages：它是有状态机的东西
+    （pending → applying → applied/failed/rejected/expired），
+    而且要能被「另一次请求」读到并处理。消息日志承担不了这个。
+    """
+
+    __tablename__ = "pending_actions"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    session_id: Mapped[str] = mapped_column(String(64), index=True, default="")
+    employee: Mapped[str] = mapped_column(String(32), index=True, default="local")
+    kind: Mapped[str] = mapped_column(String(32), default="append_faq")
+    payload: Mapped[str] = mapped_column(Text, default="{}")
+    status: Mapped[str] = mapped_column(String(16), default="pending", index=True)
+    # 预览文案给前端直接渲染，省得前端为了显示一句话去解析 payload
+    preview: Mapped[str] = mapped_column(Text, default="")
+    result: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(default=utcnow, index=True)
+    expires_at: Mapped[datetime] = mapped_column(default=utcnow)
+    decided_at: Mapped[datetime | None] = mapped_column(default=None)
+    decided_by: Mapped[str] = mapped_column(String(32), default="")
+
+
+class SessionSummary(Base):
+    """会话的滚动摘要：早期对话压缩成一段话，替代硬截断。
+
+    存 covered_until_id 而不是消息条数：消息 id 单调递增，
+    用它标记「摘要已经覆盖到哪一条」，下次加载从这条之后开始，
+    不会因为并发写入而错位。
+    """
+
+    __tablename__ = "session_summaries"
+
+    session_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    summary: Mapped[str] = mapped_column(Text, default="")
+    covered_until_id: Mapped[int] = mapped_column(default=0)
+    updated_at: Mapped[datetime] = mapped_column(default=utcnow)
+
+
 def init_db() -> None:
     Base.metadata.create_all(bind=engine)
 

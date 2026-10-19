@@ -56,31 +56,91 @@ def sanitize_messages(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 class Memory:
-    def __init__(self, session_id: str, max_messages: int = 24):
+    """会话记忆：跨轮对话的上下文，超长时压缩而不是直接丢掉。
+
+    硬截断的问题是它会安静地删掉最早说过的话——用户第一轮说「我只问销售相关」，
+    聊到第二十轮这句话就没了，模型开始答客服问题，而且没有任何迹象表明它忘了。
+    所以超过阈值时，把早期对话压成一段摘要留着，只丢原文不丢信息。
+
+    压缩只处理**连续的、纯文本的 user/assistant 前缀**：
+    一旦遇到带 tool_calls 的消息或 tool 消息就停下，避免切断配对导致 API 400。
+    """
+
+    def __init__(self, session_id: str, max_messages: int = 24, keep_recent: int = 8):
         self.session_id = session_id
         self.max_messages = max_messages
-        self._messages = self._load_from_db()
+        self.keep_recent = keep_recent
+        self.summary = ""
+        self.covered_until_id = 0
+        self._messages: list[dict[str, Any]] = []
+        self._load_from_db()
 
-    def _load_from_db(self) -> list[dict[str, Any]]:
+    def _load_from_db(self) -> None:
         try:
-            from ..chat_history import load_messages
+            from ..chat_history import load_messages_since, load_summary
 
-            history = load_messages(self.session_id, limit=self.max_messages)
-            return [
-                {"role": m["role"], "content": m["content"]}
-                for m in history
-                if m["role"] in ("user", "assistant")
-            ][-self.max_messages :]
-        except Exception:
-            return []
+            self.summary, self.covered_until_id = load_summary(self.session_id)
+            self._messages = load_messages_since(
+                self.session_id,
+                after_id=self.covered_until_id,
+                limit=self.max_messages * 2,
+            )
+        except Exception:  # noqa: BLE001
+            self._messages = []
 
     def add(self, message: dict[str, Any]) -> None:
-        self._messages.append(message)
-        if len(self._messages) > self.max_messages:
-            self._messages = self._messages[-self.max_messages :]
+        self._messages.append(dict(message, id=message.get("id", 0)))
+        # 上限放在两倍：超过 max_messages 先由压缩处理，压缩失败才走这条兜底线
+        if len(self._messages) > self.max_messages * 2:
+            self._messages = self._messages[-self.max_messages * 2 :]
 
     def get_messages(self) -> list[dict[str, Any]]:
-        return sanitize_messages(list(self._messages))
+        # id 是内部记账用的，发给模型前必须剥掉，否则部分兼容实现会拒绝未知字段
+        clean = [{k: v for k, v in m.items() if k != "id"} for m in self._messages]
+        return sanitize_messages(clean)
+
+    def compact_candidates(self) -> list[dict[str, Any]]:
+        """返回可以送去摘要的早期消息；不够长或边界不安全时返回空。"""
+        if len(self._messages) <= self.max_messages:
+            return []
+        cutoff = len(self._messages) - self.keep_recent
+        if cutoff <= 0:
+            return []
+
+        candidates: list[dict[str, Any]] = []
+        for message in self._messages[:cutoff]:
+            # 只摘要纯文本轮次：工具调用与工具结果必须和它们的 assistant 消息待在一起
+            if message.get("role") not in ("user", "assistant"):
+                return candidates
+            if message.get("tool_calls"):
+                return candidates
+            candidates.append(message)
+        return candidates
+
+    def apply_compaction(self, summary: str, consumed: list[dict[str, Any]]) -> int:
+        """用摘要替换已消费的消息，返回被替换的条数。"""
+        if not consumed:
+            return 0
+        ids = [m["id"] for m in consumed if m.get("id")]
+        if ids:
+            self.covered_until_id = max(self.covered_until_id, max(ids))
+        self.summary = summary
+        self._messages = self._messages[len(consumed) :]
+        return len(consumed)
+
+    def trim_hard(self) -> int:
+        """压缩不可用时的降级：直接丢掉早期消息，保证上下文不会无限增长。
+
+        只在「摘要失败」或「边界不安全」时走到这里。不是首选路径——
+        它一定会丢信息，所以调用点要记一笔，让问题在日志里看得见。
+        """
+        if len(self._messages) <= self.max_messages:
+            return 0
+        dropped = len(self._messages) - self.max_messages
+        self._messages = self._messages[-self.max_messages :]
+        return dropped
 
     def clear(self) -> None:
         self._messages = []
+        self.summary = ""
+        self.covered_until_id = 0

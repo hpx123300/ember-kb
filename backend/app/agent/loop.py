@@ -23,6 +23,21 @@ def strip_thought(text: str) -> str:
     return text
 
 
+# 摘要提示词要克制：它是给「下一个模型」看的工作备忘录，不是给人看的会议纪要。
+# 只保留会改变后续行为的东西（约束、事实、未完成的事），其余全部丢掉。
+SUMMARY_SYSTEM = """你在压缩一段对话历史，供后续轮次继续使用。
+
+保留：
+- 用户提出的约束与偏好（部门、范围、格式要求）
+- 已经确认的事实与数字
+- 尚未完成的任务
+
+丢弃：
+- 寒暄、重复的解释、已经解决的中间过程
+
+输出一段不超过 200 字的中文摘要，只写事实，不要评价，不要分点编号。"""
+
+
 class AgentError(Exception):
     pass
 
@@ -96,8 +111,80 @@ class AgentLoop:
         )
 
     def _build_messages(self) -> list[dict]:
-        """拼装本轮请求的消息序列（系统提示 + 经过安全修剪的记忆）。"""
-        return [{"role": "system", "content": self.system_prompt}] + self.memory.get_messages()
+        """拼装本轮请求的消息序列（系统提示 + 摘要 + 经过安全修剪的记忆）。"""
+        system = self.system_prompt
+        if self.memory.summary:
+            system = (
+                f"{system}\n\n【此前对话摘要】\n{self.memory.summary}\n"
+                "（这段摘要代替了更早的原始消息；若与最近消息冲突，以最近消息为准）"
+            )
+        return [{"role": "system", "content": system}] + self.memory.get_messages()
+
+    def _summarize(self, previous: str, messages: list[dict]) -> str:
+        """把一段早期对话压成摘要。用同一个 client，不另开连接。"""
+        lines = []
+        for message in messages:
+            text = (message.get("content") or "").strip()
+            if not text:
+                continue
+            role = "用户" if message.get("role") == "user" else "助手"
+            lines.append(f"{role}：{text[:400]}")
+        if not lines:
+            return previous
+
+        prompt = ""
+        if previous:
+            prompt += f"已有摘要：{previous}\n\n"
+        prompt += "新增对话：\n" + "\n".join(lines)
+
+        started = time.perf_counter()
+        response = self.client.chat.completions.create(
+            model=self.model,
+            messages=[
+                {"role": "system", "content": SUMMARY_SYSTEM},
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.2,
+        )
+        self._account_usage(
+            getattr(response, "usage", None),
+            int((time.perf_counter() - started) * 1000),
+        )
+        return (response.choices[0].message.content or previous).strip()
+
+    def _maybe_compact(self) -> bool:
+        """消息超长时压缩一次。返回 True 表示消息序列变了，需要重建请求。
+
+        压缩失败不能让这一轮对话挂掉——宁可退化成硬截断（丢信息但能继续），
+        也不要因为摘要调用超时把用户的问题丢掉。
+        """
+        pending = self.memory.compact_candidates()
+        if not pending:
+            dropped = self.memory.trim_hard()
+            if dropped:
+                self._record("compact", f"边界不安全，退化为硬截断（丢弃 {dropped} 条）")
+                return True
+            return False
+
+        try:
+            summary = self._summarize(self.memory.summary, pending)
+        except Exception as exc:  # noqa: BLE001
+            dropped = self.memory.trim_hard()
+            self._record("compact", f"摘要失败（{exc}），退化为硬截断（丢弃 {dropped} 条）")
+            return bool(dropped)
+
+        consumed = self.memory.apply_compaction(summary, pending)
+        self._record("compact", f"已把 {consumed} 条早期消息压成摘要")
+
+        if self.memory.session_id:
+            try:
+                from ..chat_history import save_summary
+
+                save_summary(self.memory.session_id, summary, self.memory.covered_until_id)
+            except Exception:  # noqa: BLE001
+                # 落盘失败不影响本轮：摘要还在内存里，下一次请求重新计算即可
+                pass
+        return True
 
     def _fallback_reply(self) -> str:
         """达到步数上限时的兜底：用已拿到的工具结果作答，不让整轮白跑。"""
@@ -190,6 +277,8 @@ class AgentLoop:
         self.memory.add({"role": "user", "content": user_message})
         messages = self._build_messages()
         for _ in range(self.max_iterations):
+            if self._maybe_compact():
+                messages = self._build_messages()
             self._record("think", "正在分析问题并决定是否调用工具…")
             message = self._call_llm(messages)
             if not message.tool_calls:
@@ -219,6 +308,8 @@ class AgentLoop:
         self.memory.add({"role": "user", "content": user_message})
         messages = self._build_messages()
         for _ in range(self.max_iterations):
+            if self._maybe_compact():
+                messages = self._build_messages()
             self._record("think", "正在分析问题并决定是否调用工具…")
             content = ""
             tool_calls: list[dict] = []

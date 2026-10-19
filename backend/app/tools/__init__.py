@@ -13,9 +13,9 @@
 import json
 import re
 
-from .. import training
+from .. import actions, training
 from ..agent.rag import knowledge_base
-from ..runtime import current_audiences, current_employee
+from ..runtime import current_audiences, current_employee, current_session
 
 # 问句里的虚词与疑问成分：参与检索只会让 BM25 的候选变脏，不带来召回
 _QUERY_NOISE = {
@@ -127,6 +127,41 @@ def get_progress() -> str:
     return json.dumps(summary, ensure_ascii=False)
 
 
+def propose_faq(chapter: str = "", question: str = "", answer: str = "") -> str:
+    """提议往某章资料末尾补一条问答。
+
+    注意它**不写文件**。工具一旦能直接改知识库，模型一次幻觉就会改掉线上资料，
+    而且改坏了没有痕迹。所以这里只登记一条待确认动作，由人在界面上点确认才执行。
+
+    返回值要明确告诉模型「还没写」，否则它会顺着"我先查一下、再补进去"的语境
+    直接回复用户"已经加好了"——这是这套机制里最容易出现的一种谎话。
+    """
+    result = actions.propose(
+        session_id=current_session(),
+        employee=current_employee(),
+        kind="append_faq",
+        payload={"chapter": chapter, "question": question, "answer": answer},
+        preview=f"在《{chapter}》末尾补一条：{question}",
+    )
+    if not result.get("ok"):
+        return json.dumps(
+            {"status": "not_proposed", "error": result.get("error", "提交失败")},
+            ensure_ascii=False,
+        )
+
+    action = result["action"]
+    return json.dumps(
+        {
+            "status": "pending_confirmation",
+            "action_id": action["id"],
+            "expires_at": action["expires_at"],
+            "must_tell_user": "已提交，等待用户在界面上确认后才会写入。",
+            "do_not_say": "不要说「已经加进去了」「已经更新了」。",
+        },
+        ensure_ascii=False,
+    )
+
+
 TOOLS = [
     {
         "type": "function",
@@ -172,10 +207,32 @@ TOOLS = [
             "parameters": {"type": "object", "properties": {}, "required": []},
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "propose_faq",
+            "description": (
+                "提议往某一章资料末尾补一条问答。只在用户明确说「把这个补进去」"
+                "「帮我记到知识库」时调用。它不会立刻写入，只提交一条待确认动作，"
+                "需要用户在界面上点确认。调用后必须告诉用户「已提交、待确认」，"
+                "不许说已经加好了。"
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "chapter": {"type": "string", "description": "章节文件名，如 handbook-attendance.md"},
+                    "question": {"type": "string", "description": "要补的问题，不超过 200 字"},
+                    "answer": {"type": "string", "description": "标准答案，不超过 1000 字"},
+                },
+                "required": ["chapter", "question", "answer"],
+            },
+        },
+    },
 ]
 
 TOOL_FUNCTIONS = {
     "search_knowledge": search_knowledge,
     "make_quiz": make_quiz,
     "get_progress": get_progress,
+    "propose_faq": propose_faq,
 }

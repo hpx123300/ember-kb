@@ -14,6 +14,9 @@ from contextvars import ContextVar
 
 _employee: ContextVar[str] = ContextVar("ember_employee", default="local")
 _audiences: ContextVar[set[str] | None] = ContextVar("ember_audiences", default=None)
+# 会话 id 也要带进来：工具要把「谁提的写操作」记到待确认表上，
+# 而工具调用时拿不到 HTTP 请求体，只能靠上下文
+_session: ContextVar[str] = ContextVar("ember_session", default="")
 
 
 def current_employee() -> str:
@@ -24,12 +27,18 @@ def current_audiences() -> set[str] | None:
     return _audiences.get()
 
 
+def current_session() -> str:
+    return _session.get()
+
+
 @contextmanager
-def user_scope(employee: str = "local", audiences: set[str] | None = None):
+def user_scope(employee: str = "local", audiences: set[str] | None = None, session_id: str = ""):
     token_emp = _employee.set(employee or "local")
     token_aud = _audiences.set(audiences)
+    token_ses = _session.set(session_id or "")
     try:
         yield
     finally:
         _employee.reset(token_emp)
         _audiences.reset(token_aud)
+        _session.reset(token_ses)
