@@ -149,3 +149,25 @@ export interface Metrics {
   p95_latency_ms: number;
   by_tool: Record<string, { calls: number; success_rate: number | null; avg_latency_ms: number }>;
 }
+
+/** Agent 提议的写操作。只有确认之后才会真的落到知识库。 */
+export interface PendingAction {
+  id: string;
+  kind: string;
+  status: "pending" | "applying" | "applied" | "failed" | "rejected" | "expired";
+  preview: string;
+  employee: string;
+  session_id: string;
+  created_at: string;
+  expires_at: string;
+  result: string;
+}
+
+export interface ActionDecision {
+  ok: boolean;
+  status?: string;
+  result?: string;
+  error?: string;
+  idempotent?: boolean;
+  action?: PendingAction;
+}

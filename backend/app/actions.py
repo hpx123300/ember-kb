@@ -46,6 +46,19 @@ def _naive_utcnow() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
+def _iso(value: datetime | None) -> str:
+    """序列化成带时区的 ISO 串。
+
+    SQLite 取回来的是 naive datetime，直接 isoformat() 会得到
+    `2026-10-19T07:30:00` 这种没有时区标记的串，前端 `new Date()` 会按**本地时间**解析，
+    东八区就整整差 8 小时——表现为倒计时一打开就是「已过期」。
+    """
+    if not value:
+        return ""
+    aware = value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    return aware.isoformat()
+
+
 def _row_to_dict(row: PendingAction) -> dict:
     return {
         "id": row.id,
@@ -54,8 +67,8 @@ def _row_to_dict(row: PendingAction) -> dict:
         "preview": row.preview,
         "employee": row.employee,
         "session_id": row.session_id,
-        "created_at": row.created_at.isoformat() if row.created_at else "",
-        "expires_at": row.expires_at.isoformat() if row.expires_at else "",
+        "created_at": _iso(row.created_at),
+        "expires_at": _iso(row.expires_at),
         "result": row.result,
     }
 

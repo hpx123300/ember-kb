@@ -1,4 +1,5 @@
 import type {
+  ActionDecision,
   AskMeta,
   AssistantReply,
   Chapter,
@@ -6,6 +7,7 @@ import type {
   LibStats,
   Mastery,
   Metrics,
+  PendingAction,
   Quiz,
   QuizResult,
   Trace,
@@ -169,6 +171,16 @@ export const api = {
     request<{ ok: boolean }>(`/api/library/docs/${encodeURIComponent(filename)}`, {
       method: "DELETE",
     }),
+
+  /** 待确认的写操作：Agent 只提交意图，人点确认之后才落到知识库。 */
+  actions: (status = "pending") => request<PendingAction[]>(`/api/actions?status=${status}`),
+  approveAction: (id: string) =>
+    request<ActionDecision>(`/api/actions/${id}/approve`, { method: "POST" }),
+  rejectAction: (id: string, reason = "") =>
+    request<ActionDecision>(
+      `/api/actions/${id}/reject?reason=${encodeURIComponent(reason)}`,
+      { method: "POST" },
+    ),
 
   metrics: (days = 7) => request<Metrics>(`/api/metrics?days=${days}`),
   traces: (limit = 20) => request<Trace[]>(`/api/traces?limit=${limit}`),

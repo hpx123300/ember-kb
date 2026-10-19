@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
-import { ArrowRight, Check, MessageCircle, X } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { ArrowRight, Check, MessageCircle, ShieldCheck, X } from "lucide-react";
 import { api, newSessionId } from "../lib/api";
-import type { Chapter, Mastery, Quiz, QuizResult } from "../lib/types";
+import type { Chapter, Mastery, PendingAction, Quiz, QuizResult } from "../lib/types";
 import { Button, Card, EmptyState, Loading, SectionTitle, Skeleton, Typing } from "../components/ui";
 
 export default function LearnPage() {
@@ -237,11 +237,58 @@ export default function LearnPage() {
   );
 }
 
+/** 剩余确认时间。本地时钟算，不为了一个倒计时反复请求服务端。 */
+function remainingLabel(expiresAt: string, now: number): string {
+  const ms = new Date(expiresAt).getTime() - now;
+  if (!Number.isFinite(ms)) return "";
+  if (ms <= 0) return "已过期";
+  return `${Math.ceil(ms / 60000)} 分钟后失效`;
+}
+
 function CoachPanel() {
   const [messages, setMessages] = useState<Array<{ role: "user" | "assistant"; text: string }>>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [sessionId] = useState(newSessionId);
+  // Agent 提议的写操作。不显示出来，用户就永远不知道有东西在等他确认。
+  const [pending, setPending] = useState<PendingAction[]>([]);
+  const [acting, setActing] = useState("");
+  const [notice, setNotice] = useState<{ text: string; ok: boolean } | null>(null);
+  const [now, setNow] = useState(() => Date.now());
+
+  const refreshPending = useCallback(async () => {
+    try {
+      setPending(await api.actions("pending"));
+    } catch {
+      // 拉不到待确认列表不该打断对话本身，静默跳过即可
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshPending();
+  }, [refreshPending]);
+
+  useEffect(() => {
+    if (pending.length === 0) return;
+    const timer = window.setInterval(() => setNow(Date.now()), 30_000);
+    return () => window.clearInterval(timer);
+  }, [pending.length]);
+
+  async function decide(id: string, approve: boolean) {
+    setActing(id);
+    setNotice(null);
+    try {
+      const res = approve ? await api.approveAction(id) : await api.rejectAction(id);
+      setNotice({ text: res.result || (approve ? "已写入知识库" : "已忽略"), ok: true });
+      await refreshPending();
+    } catch (e) {
+      setNotice({ text: (e as Error).message, ok: false });
+      // 失败也要刷新：可能是别人已经处理过，列表该更新
+      await refreshPending();
+    } finally {
+      setActing("");
+    }
+  }
 
   async function send(text?: string) {
     const message = (text ?? input).trim();
@@ -270,11 +317,54 @@ function CoachPanel() {
       });
     } finally {
       setBusy(false);
+      // 这一轮可能刚产生一条待确认动作，问完再拉一次
+      void refreshPending();
     }
   }
 
   return (
     <Card className="!p-4">
+      {pending.length > 0 && (
+        <div className="space-y-2 mb-3">
+          {pending.map((action) => (
+            <div
+              key={action.id}
+              className="rounded-[10px] border border-accent/30 bg-accent-soft/50 px-3 py-2.5"
+            >
+              <div className="flex items-center gap-1.5 text-[10.5px] tracking-wide text-accent">
+                <ShieldCheck size={12} />
+                待确认写入
+                <span className="ml-auto font-mono text-faint">
+                  {remainingLabel(action.expires_at, now)}
+                </span>
+              </div>
+              <div className="mt-1.5 text-[12.5px] leading-relaxed text-ink">{action.preview}</div>
+              <div className="mt-2 flex items-center gap-2">
+                <Button
+                  variant="primary"
+                  className="!px-2.5 !py-1 !text-[11.5px] whitespace-nowrap"
+                  disabled={acting === action.id}
+                  onClick={() => decide(action.id, true)}
+                >
+                  <Check size={12} /> 确认
+                </Button>
+                <Button
+                  variant="ghost"
+                  className="!px-2.5 !py-1 !text-[11.5px] whitespace-nowrap"
+                  disabled={acting === action.id}
+                  onClick={() => decide(action.id, false)}
+                >
+                  <X size={12} /> 忽略
+                </Button>
+                <span className="text-[10.5px] text-faint">确认后才写入</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      {notice && (
+        <div className={`mb-2 text-[11.5px] ${notice.ok ? "text-ok" : "text-bad"}`}>{notice.text}</div>
+      )}
       <div className="space-y-3 min-h-[120px] max-h-[420px] overflow-y-auto">
         {messages.length === 0 && (
           <div className="text-[12.5px] text-muted leading-relaxed">
