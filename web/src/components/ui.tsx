@@ -52,8 +52,8 @@ export function SectionTitle({
   return (
     <div className="flex items-end justify-between gap-4 mb-4">
       <div>
-        <div className="display text-[19px] text-ink">{title}</div>
-        {desc ? <div className="text-[12.5px] text-muted mt-1">{desc}</div> : null}
+        <div className="display text-[21px] text-ink">{title}</div>
+        {desc ? <div className="text-[14px] text-muted mt-1">{desc}</div> : null}
       </div>
       {right}
     </div>
@@ -71,9 +71,9 @@ export function Stat({
 }) {
   return (
     <div className="panel px-4 py-3.5">
-      <div className="text-[11px] text-faint tracking-wide">{label}</div>
-      <div className="display text-[24px] text-ink mt-1 leading-none">{value}</div>
-      {hint ? <div className="text-[11px] text-muted mt-1.5">{hint}</div> : null}
+      <div className="text-[12.5px] text-faint tracking-wide">{label}</div>
+      <div className="display text-[26px] text-ink mt-1 leading-none">{value}</div>
+      {hint ? <div className="text-[12.5px] text-muted mt-1.5">{hint}</div> : null}
     </div>
   );
 }
@@ -89,9 +89,9 @@ export function EmptyState({
 }) {
   return (
     <div className="panel py-14 px-8 text-center animate-fade">
-      <div className="display text-[17px] text-ink">{title}</div>
+      <div className="display text-[18.5px] text-ink">{title}</div>
       {desc ? (
-        <p className="text-[12.5px] text-muted mt-2 max-w-sm mx-auto leading-relaxed">{desc}</p>
+        <p className="text-[14px] text-muted mt-2 max-w-sm mx-auto leading-relaxed">{desc}</p>
       ) : null}
       {action ? <div className="mt-5 flex justify-center">{action}</div> : null}
     </div>
@@ -100,7 +100,7 @@ export function EmptyState({
 
 export function Loading({ label = "加载中" }: { label?: string }) {
   return (
-    <div className="flex items-center justify-center gap-2 py-16 text-[12.5px] text-muted">
+    <div className="flex items-center justify-center gap-2 py-16 text-[14px] text-muted">
       <Loader2 size={14} className="animate-spin" />
       {label}
     </div>

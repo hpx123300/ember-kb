@@ -98,12 +98,12 @@ export default function AskPage() {
         {turns.length === 0 && (
           <div className="animate-rise">
             <div className="panel px-7 py-9">
-              <div className="display text-[20px] text-ink leading-snug">
+              <div className="display text-[22px] text-ink leading-snug">
                 资料里的答案，
                 <br />
                 都能点回去看原文。
               </div>
-              <p className="text-[13px] text-muted mt-3 max-w-md leading-relaxed">
+              <p className="text-[14.5px] text-muted mt-3 max-w-md leading-relaxed">
                 我只回答知识库里写过的东西。查不到会直接告诉你，不猜、不补全。
                 回答里的每个数字都来自原文，引用可以展开对照。
               </p>
@@ -125,7 +125,7 @@ export default function AskPage() {
         {turns.map((turn, i) =>
           turn.role === "user" ? (
             <div key={i} className="flex justify-end animate-rise">
-              <div className="max-w-[80%] rounded-[16px] rounded-br-[6px] bg-accent-soft px-4 py-2.5 text-[13.5px] text-ink leading-relaxed">
+              <div className="max-w-[80%] rounded-[16px] rounded-br-[6px] bg-accent-soft px-4 py-2.5 text-[15px] text-ink leading-relaxed">
                 {turn.content}
               </div>
             </div>
@@ -139,12 +139,12 @@ export default function AskPage() {
       <div className="sticky bottom-4 mt-8">
         {categories.length > 0 && (
           <div className="flex flex-wrap items-center gap-1.5 mb-2.5 px-1">
-            <span className="text-[11px] text-faint mr-1">限定范围</span>
+            <span className="text-[12.5px] text-faint mr-1">限定范围</span>
             {["", ...categories].map((c) => (
               <button
                 key={c || "all"}
                 onClick={() => setCategory(c)}
-                className={`rounded-full px-2.5 py-1 text-[11.5px] border transition-colors ${
+                className={`rounded-full px-2.5 py-1 text-[13px] border transition-colors ${
                   category === c
                     ? "border-accent text-accent bg-accent-soft"
                     : "border-line text-muted hover:text-ink"
@@ -157,7 +157,7 @@ export default function AskPage() {
         )}
         <div className="panel p-2 pl-4 flex items-end gap-2 shadow-[0_14px_40px_-28px_rgba(80,60,40,0.6)]">
           <input
-            className="flex-1 bg-transparent outline-none text-[14px] py-2.5 placeholder:text-faint"
+            className="flex-1 bg-transparent outline-none text-[15.5px] py-2.5 placeholder:text-faint"
             placeholder="问点什么，比如：年假怎么申请"
             value={input}
             onChange={(e) => setInput(e.target.value)}
@@ -176,7 +176,7 @@ export default function AskPage() {
             </Button>
           )}
         </div>
-        <div className="text-[10.5px] text-faint mt-2 px-1">
+        <div className="text-[12px] text-faint mt-2 px-1">
           回答仅依据内部资料，涉及金额与时限以原文为准
         </div>
       </div>
@@ -192,9 +192,9 @@ function AssistantTurn({ turn, typing }: { turn: Turn; typing: boolean }) {
         <div className="h-6 w-6 rounded-[8px] bg-accent text-[#fff8f2] grid place-items-center">
           <BookMarked size={12} />
         </div>
-        <span className="text-[11.5px] text-faint">薪火</span>
+        <span className="text-[13px] text-faint">薪火</span>
         {turn.meta && !refused && (
-          <span className="text-[10.5px] text-faint">
+          <span className="text-[12px] text-faint">
             · 覆盖率 {(turn.meta.coverage * 100).toFixed(0)}%
           </span>
         )}
@@ -204,7 +204,7 @@ function AssistantTurn({ turn, typing }: { turn: Turn; typing: boolean }) {
         <Typing />
       ) : (
         <div
-          className={`rounded-[16px] rounded-tl-[6px] px-5 py-4 text-[13.8px] leading-[1.85] whitespace-pre-wrap ${
+          className={`rounded-[16px] rounded-tl-[6px] px-5 py-4 text-[15px] leading-[1.85] whitespace-pre-wrap ${
             refused
               ? "bg-sage-soft/60 border border-[#d8ddc8] text-ink-soft"
               : turn.error
@@ -218,19 +218,19 @@ function AssistantTurn({ turn, typing }: { turn: Turn; typing: boolean }) {
 
       {turn.meta && turn.meta.citations.length > 0 && (
         <div className="mt-3 space-y-2 stagger">
-          <div className="text-[10.5px] text-faint tracking-wide">出处</div>
+          <div className="text-[12px] text-faint tracking-wide">出处</div>
           {turn.meta.citations.map((c) => (
             <details key={c.index} className="cite-card group cursor-pointer">
               <summary className="list-none flex items-start gap-2.5">
-                <span className="font-mono text-[10.5px] text-accent mt-[3px] shrink-0">
+                <span className="font-mono text-[12px] text-accent mt-[3px] shrink-0">
                   [{c.index}]
                 </span>
                 <span className="min-w-0">
-                  <span className="text-[12.5px] text-ink block truncate">{c.title}</span>
-                  <span className="text-[10.5px] text-faint font-mono block truncate">{c.source}</span>
+                  <span className="text-[14px] text-ink block truncate">{c.title}</span>
+                  <span className="text-[12px] text-faint font-mono block truncate">{c.source}</span>
                 </span>
               </summary>
-              <div className="mt-2 pl-6 text-[12px] text-muted leading-relaxed border-t border-line-2 pt-2">
+              <div className="mt-2 pl-6 text-[13.5px] text-muted leading-relaxed border-t border-line-2 pt-2">
                 {c.snippet}…
               </div>
             </details>

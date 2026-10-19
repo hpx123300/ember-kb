@@ -39,19 +39,19 @@ export default function LoginPage({ onLogin }: { onLogin: (user: User) => void }
             <Flame size={18} strokeWidth={2} />
           </div>
           <div className="leading-tight">
-            <div className="display text-[18px] text-ink">薪火</div>
-            <div className="font-mono text-[9.5px] tracking-[0.18em] text-faint uppercase">Ember</div>
+            <div className="display text-[20px] text-ink">薪火</div>
+            <div className="font-mono text-[11px] tracking-[0.18em] text-faint uppercase">Ember</div>
           </div>
         </div>
 
-        <h1 className="display text-[26px] text-ink">登录后才知道你能看哪些资料</h1>
-        <p className="text-[13px] text-muted mt-2 leading-relaxed">
+        <h1 className="display text-[28px] text-ink">登录后才知道你能看哪些资料</h1>
+        <p className="text-[14.5px] text-muted mt-2 leading-relaxed">
           知识库按部门授权：销售看不到客服口径，客服看不到销售话术，管理员可见全部。
         </p>
 
         <div className="panel mt-6 space-y-3">
           <div>
-            <label className="text-[11px] text-faint">账号</label>
+            <label className="text-[12.5px] text-faint">账号</label>
             <input
               className="input mt-1"
               value={username}
@@ -61,7 +61,7 @@ export default function LoginPage({ onLogin }: { onLogin: (user: User) => void }
             />
           </div>
           <div>
-            <label className="text-[11px] text-faint">密码</label>
+            <label className="text-[12.5px] text-faint">密码</label>
             <input
               className="input mt-1"
               type="password"
@@ -71,7 +71,7 @@ export default function LoginPage({ onLogin }: { onLogin: (user: User) => void }
               autoComplete="current-password"
             />
           </div>
-          {error && <div className="text-[12px] text-bad">{error}</div>}
+          {error && <div className="text-[13.5px] text-bad">{error}</div>}
           <Button variant="primary" className="w-full !justify-center" onClick={submit} disabled={busy}>
             {busy ? "登录中…" : "登录"}
             {!busy && <LogIn size={13} className="ml-1.5" />}
@@ -79,7 +79,7 @@ export default function LoginPage({ onLogin }: { onLogin: (user: User) => void }
         </div>
 
         <div className="mt-6">
-          <div className="text-[11px] text-faint mb-2">演示账号（点一下填入）</div>
+          <div className="text-[12.5px] text-faint mb-2">演示账号（点一下填入）</div>
           <div className="space-y-1.5">
             {DEMO.map((d) => (
               <button
@@ -90,8 +90,8 @@ export default function LoginPage({ onLogin }: { onLogin: (user: User) => void }
                 }}
                 className="w-full flex items-center justify-between rounded-[10px] border border-line bg-panel px-3 py-2 text-left hover:border-accent/40 transition-colors"
               >
-                <span className="font-mono text-[11.5px] text-ink-soft">{d.username}</span>
-                <span className="text-[11px] text-faint">{d.hint}</span>
+                <span className="font-mono text-[13px] text-ink-soft">{d.username}</span>
+                <span className="text-[12.5px] text-faint">{d.hint}</span>
               </button>
             ))}
           </div>

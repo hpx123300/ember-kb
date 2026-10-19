@@ -32,11 +32,11 @@ export default class ErrorBoundary extends Component<
     if (!this.state.error) return this.props.children;
     return (
       <div className="panel p-8 max-w-xl mx-auto mt-10 text-center">
-        <div className="text-[15px] text-ink">这个页面渲染出错了</div>
-        <p className="text-[12.5px] text-muted mt-2 leading-relaxed">
+        <div className="text-[16.5px] text-ink">这个页面渲染出错了</div>
+        <p className="text-[14px] text-muted mt-2 leading-relaxed">
           其他页面不受影响，可以重试一次；如果反复出现，多半是接口返回的数据结构和前端预期不一致。
         </p>
-        <pre className="mt-3 text-left text-[11.5px] text-faint bg-paper border border-line rounded-lg p-3 overflow-auto max-h-40">
+        <pre className="mt-3 text-left text-[13px] text-faint bg-paper border border-line rounded-lg p-3 overflow-auto max-h-40">
           {this.state.error.message}
         </pre>
         <div className="mt-4 flex justify-center gap-2">

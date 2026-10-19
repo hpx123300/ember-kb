@@ -87,8 +87,8 @@ export default function LibraryPage() {
                     <FileText size={14} className="text-accent" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div className="text-[13px] text-ink truncate">{d.title}</div>
-                    <div className="text-[11px] text-faint mt-0.5 font-mono truncate">
+                    <div className="text-[14.5px] text-ink truncate">{d.title}</div>
+                    <div className="text-[12.5px] text-faint mt-0.5 font-mono truncate">
                       {d.filename} · {d.sections} 段 · {d.chars} 字 · {d.updated_at}
                     </div>
                   </div>
@@ -123,14 +123,14 @@ export default function LibraryPage() {
             </Button>
           </div>
           <textarea
-            className="input font-mono !text-[12px] leading-relaxed min-h-[220px] resize-y"
+            className="input font-mono !text-[13.5px] leading-relaxed min-h-[220px] resize-y"
             value={content}
             onChange={(e) => setContent(e.target.value)}
             spellCheck={false}
           />
           {msg && (
             <div
-              className={`mt-3 text-[12px] rounded-[9px] px-3 py-2 animate-fade ${
+              className={`mt-3 text-[13.5px] rounded-[9px] px-3 py-2 animate-fade ${
                 msg.kind === "ok"
                   ? "bg-sage-soft text-ink-soft"
                   : "bg-[#fbf1ee] text-bad border border-[#eccfc7]"

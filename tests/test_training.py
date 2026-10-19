@@ -134,7 +134,14 @@ def test_upload_rejects_path_traversal():
         library.save_doc("../../etc/passwd.md", "---\ncategory: 制度\n---\n正文")
 
 
-def test_upload_and_delete_roundtrip():
+def test_upload_and_delete_roundtrip(tmp_path, monkeypatch):
+    """上传再删除要能回到原状态。
+
+    知识库目录必须换成临时目录：原实现直接往真实 KNOWLEDGE_DIR 里写文件。
+    平时看不出问题（写完立刻删），但只要另一个进程同时读知识库——比如评测脚本
+    正好在检索——它就会读到这个刚被删掉的临时文件而崩溃。
+    """
+    monkeypatch.setattr(library, "KNOWLEDGE_DIR", tmp_path)
     name = "tmp-test-doc.md"
     content = "---\ncategory: 制度\naudience: 全员\n---\n# 临时文档\n\n## 小节\n这是临时内容。\n"
     library.save_doc(name, content)

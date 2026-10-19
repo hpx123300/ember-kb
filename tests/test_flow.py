@@ -75,7 +75,11 @@ def test_domain_term_survives_tokenization():
 
 
 def test_category_is_respected(monkeypatch):
-    """指定类别后，引用只能来自该类别。"""
+    """指定类别后，引用只能来自该类别的文档。
+
+    断言的是「类别」而不是「某一个文件」：产品类现在有 3 份文档，
+    写死文件名会让这条测试变成「知识库不许新增文档」——那是测试在拖后腿，不是保护。
+    """
     monkeypatch.setattr(
         "backend.app.flow.llm.chat_json",
         lambda prompt, system, temperature=0.0, **kw: {"can_answer": True, "reason": "资料写了"},
@@ -86,7 +90,17 @@ def test_category_is_respected(monkeypatch):
     )
     result = flow.ask("基础版多少钱", category="产品")
     assert result["refused"] is False
-    assert all(c["source"] == "product-overview.md" for c in result["citations"])
+    assert result["citations"]
+
+    from backend.app.agent.rag import knowledge_base
+
+    knowledge_base.load()
+    product_sources = {
+        chunk["source"]
+        for chunk in knowledge_base.chunks
+        if (chunk.get("meta") or {}).get("category") == "产品"
+    }
+    assert all(c["source"] in product_sources for c in result["citations"])
 
 
 def test_judge_can_refuse_even_with_high_coverage(monkeypatch):

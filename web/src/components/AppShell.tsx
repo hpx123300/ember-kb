@@ -40,8 +40,8 @@ export default function AppShell({
             <Flame size={17} strokeWidth={2} />
           </div>
           <div className="leading-tight">
-            <div className="display text-[16px] text-ink">薪火</div>
-            <div className="font-mono text-[9.5px] tracking-[0.18em] text-faint uppercase">Ember</div>
+            <div className="display text-[17.5px] text-ink">薪火</div>
+            <div className="font-mono text-[11px] tracking-[0.18em] text-faint uppercase">Ember</div>
           </div>
         </div>
 
@@ -53,7 +53,7 @@ export default function AppShell({
               <button
                 key={item.key}
                 onClick={() => onNavigate(item.key)}
-                className={`relative w-full flex items-center gap-2.5 rounded-[11px] px-3 py-2.5 text-[13px] transition-colors duration-200 ${
+                className={`relative w-full flex items-center gap-2.5 rounded-[11px] px-3 py-2.5 text-[14.5px] transition-colors duration-200 ${
                   active
                     ? "bg-panel text-ink border border-line"
                     : "text-muted hover:text-ink hover:bg-panel/60 border border-transparent"
@@ -72,8 +72,8 @@ export default function AppShell({
         <div className="mt-auto px-2 pt-8 space-y-2.5">
           <div className="flex items-center justify-between">
             <div className="min-w-0">
-              <div className="text-[12px] text-ink truncate">{user.name || user.username}</div>
-              <div className="text-[10.5px] text-faint">
+              <div className="text-[13.5px] text-ink truncate">{user.name || user.username}</div>
+              <div className="text-[12px] text-faint">
                 {user.department} · {user.role === "admin" ? "管理员" : "员工"}
               </div>
             </div>
@@ -86,8 +86,8 @@ export default function AppShell({
             </button>
           </div>
           <div className="h-px bg-line" />
-          <div className="text-[10.5px] leading-relaxed text-faint">知识库 · 本地部署</div>
-          <div className="text-[10.5px] leading-relaxed text-faint">
+          <div className="text-[12px] leading-relaxed text-faint">知识库 · 本地部署</div>
+          <div className="text-[12px] leading-relaxed text-faint">
             可见范围：{user.audiences.includes("*") ? "全部资料" : user.audiences.filter((a) => a !== "新员工").join(" / ")}
           </div>
         </div>
@@ -102,7 +102,7 @@ export default function AppShell({
               <button
                 key={item.key}
                 onClick={() => onNavigate(item.key)}
-                className={`flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-[12px] whitespace-nowrap transition-colors ${
+                className={`flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-[13.5px] whitespace-nowrap transition-colors ${
                   active ? "bg-accent text-[#fff8f2]" : "bg-panel text-muted border border-line"
                 }`}
               >
@@ -115,8 +115,8 @@ export default function AppShell({
 
         <header className="px-6 md:px-12 pt-8 md:pt-12 pb-2">
           <div className="eyebrow">{meta.eyebrow}</div>
-          <h1 className="display text-[28px] md:text-[34px] mt-2 text-ink">{meta.title}</h1>
-          <p className="text-[13px] text-muted mt-2">{meta.desc}</p>
+          <h1 className="display text-[30px] md:text-[36px] mt-2 text-ink">{meta.title}</h1>
+          <p className="text-[14.5px] text-muted mt-2">{meta.desc}</p>
         </header>
 
         <main className="flex-1 px-6 md:px-12 pb-20 pt-5">{children}</main>

@@ -37,7 +37,7 @@ export default function InsightsPage() {
       <div className="grid lg:grid-cols-[280px_1fr] gap-5 items-start">
         <Card className="!p-6 flex flex-col items-center">
           <Ring value={data.completion} />
-          <div className="text-[11.5px] text-muted mt-4 text-center leading-relaxed">
+          <div className="text-[13px] text-muted mt-4 text-center leading-relaxed">
             完成 {data.passed} 章
             <br />
             共 {data.total_chapters} 章
@@ -56,13 +56,13 @@ export default function InsightsPage() {
                   <Card key={c.chapter} className="!p-3.5" hover>
                     <div className="flex items-center justify-between gap-3">
                       <div className="min-w-0">
-                        <div className="text-[13px] text-ink truncate">{c.title}</div>
-                        <div className="text-[11px] text-faint mt-0.5">
+                        <div className="text-[14.5px] text-ink truncate">{c.title}</div>
+                        <div className="text-[12.5px] text-faint mt-0.5">
                           {c.category} · {c.attempts ? `考过 ${c.attempts} 次` : "未开始"}
                         </div>
                       </div>
                       <div className="text-right shrink-0">
-                        <div className={`text-[12px] ${c.passed ? "text-ok" : c.attempts ? "text-warn" : "text-faint"}`}>
+                        <div className={`text-[13.5px] ${c.passed ? "text-ok" : c.attempts ? "text-warn" : "text-faint"}`}>
                           {c.attempts ? `${c.best} / 5` : "—"}
                         </div>
                       </div>
@@ -71,7 +71,7 @@ export default function InsightsPage() {
                       <Progress value={pct} max={100} />
                     </div>
                     {ratio === 0 && c.attempts > 0 && (
-                      <div className="text-[11px] text-warn mt-1.5">还没到 80%，建议再看一遍原文</div>
+                      <div className="text-[12.5px] text-warn mt-1.5">还没到 80%，建议再看一遍原文</div>
                     )}
                   </Card>
                 );
@@ -85,8 +85,8 @@ export default function InsightsPage() {
           <div className="flex items-start gap-3">
             <AlertCircle size={15} className="text-warn mt-0.5 shrink-0" />
             <div>
-              <div className="text-[13px] text-ink">最该补的三章</div>
-              <div className="text-[12px] text-muted mt-1 leading-relaxed">
+              <div className="text-[14.5px] text-ink">最该补的三章</div>
+              <div className="text-[13.5px] text-muted mt-1 leading-relaxed">
                 {data.weak.map((w) => w.title).join("、")}
                 {data.untouched.length > 0 && `；另外 ${data.untouched.slice(0, 3).join("、")} 还没开始。`}
               </div>
@@ -100,24 +100,24 @@ export default function InsightsPage() {
           <SectionTitle title="近 7 天调用" desc="成本与延迟按真实调用记账，不是估算" />
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             <Card className="!p-4">
-              <div className="text-[11px] text-faint flex items-center gap-1">
+              <div className="text-[12.5px] text-faint flex items-center gap-1">
                 <ArrowUpRight size={11} /> 调用次数
               </div>
-              <div className="display text-[20px] text-ink mt-1">{metrics.calls}</div>
+              <div className="display text-[22px] text-ink mt-1">{metrics.calls}</div>
             </Card>
             <Card className="!p-4">
-              <div className="text-[11px] text-faint">成本</div>
-              <div className="display text-[20px] text-ink mt-1">¥{metrics.cost.toFixed(4)}</div>
+              <div className="text-[12.5px] text-faint">成本</div>
+              <div className="display text-[22px] text-ink mt-1">¥{metrics.cost.toFixed(4)}</div>
             </Card>
             <Card className="!p-4">
-              <div className="text-[11px] text-faint flex items-center gap-1">
+              <div className="text-[12.5px] text-faint flex items-center gap-1">
                 <Timer size={11} /> 平均延迟
               </div>
-              <div className="display text-[20px] text-ink mt-1">{metrics.avg_latency_ms}ms</div>
+              <div className="display text-[22px] text-ink mt-1">{metrics.avg_latency_ms}ms</div>
             </Card>
             <Card className="!p-4">
-              <div className="text-[11px] text-faint">P95 延迟</div>
-              <div className="display text-[20px] text-ink mt-1">{metrics.p95_latency_ms}ms</div>
+              <div className="text-[12.5px] text-faint">P95 延迟</div>
+              <div className="display text-[22px] text-ink mt-1">{metrics.p95_latency_ms}ms</div>
             </Card>
           </div>
         </div>
@@ -148,7 +148,7 @@ function Ring({ value }: { value: number }) {
         />
       </svg>
       <div className="absolute inset-0 grid place-items-center">
-        <div className="display text-[26px] text-ink">{(pct * 100).toFixed(0)}%</div>
+        <div className="display text-[28px] text-ink">{(pct * 100).toFixed(0)}%</div>
       </div>
     </div>
   );

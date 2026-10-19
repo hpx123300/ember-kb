@@ -54,7 +54,7 @@ export default function App() {
   if (checking) {
     return (
       <div className="min-h-screen grid place-items-center">
-        <div className="font-mono text-[11px] tracking-[0.2em] text-faint uppercase">loading</div>
+        <div className="font-mono text-[12.5px] tracking-[0.2em] text-faint uppercase">loading</div>
       </div>
     );
   }

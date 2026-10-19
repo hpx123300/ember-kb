@@ -83,20 +83,20 @@ export default function LearnPage() {
                     <div className="flex items-center justify-between">
                       <span className="chip">{c.category || "未分类"}</span>
                       {record?.passed ? (
-                        <span className="flex items-center gap-1 text-[10.5px] text-ok">
+                        <span className="flex items-center gap-1 text-[12px] text-ok">
                           <Check size={11} /> 已通过
                         </span>
                       ) : record && record.attempts > 0 ? (
-                        <span className="text-[10.5px] text-warn">最好 {record.best} 分</span>
+                        <span className="text-[12px] text-warn">最好 {record.best} 分</span>
                       ) : (
-                        <span className="text-[10.5px] text-faint">未开始</span>
+                        <span className="text-[12px] text-faint">未开始</span>
                       )}
                     </div>
-                    <div className="text-[14.5px] text-ink mt-2.5">{c.title}</div>
-                    <div className="text-[11.5px] text-muted mt-1">
+                    <div className="text-[16px] text-ink mt-2.5">{c.title}</div>
+                    <div className="text-[13px] text-muted mt-1">
                       {c.sections.length} 个小节 · 面向 {c.audience || "全员"}
                     </div>
-                    <div className="mt-3 flex items-center gap-1 text-[11.5px] text-accent opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="mt-3 flex items-center gap-1 text-[13px] text-accent opacity-0 group-hover:opacity-100 transition-opacity">
                       开始测验 <ArrowRight size={12} />
                     </div>
                   </div>
@@ -117,8 +117,8 @@ export default function LearnPage() {
           <div className="panel w-full max-w-2xl max-h-[86vh] overflow-y-auto animate-scale-in">
             <div className="sticky top-0 bg-panel border-b border-line px-6 py-4 flex items-center justify-between">
               <div>
-                <div className="text-[11px] text-faint">章节测验</div>
-                <div className="display text-[17px] text-ink">{active?.title}</div>
+                <div className="text-[12.5px] text-faint">章节测验</div>
+                <div className="display text-[18.5px] text-ink">{active?.title}</div>
               </div>
               <button
                 className="btn btn-ghost !p-2"
@@ -140,8 +140,8 @@ export default function LearnPage() {
                     const picked = answers[qi];
                     return (
                       <div key={qi} className="mb-6 last:mb-0">
-                        <div className="text-[13.5px] text-ink leading-relaxed">
-                          <span className="font-mono text-[11px] text-accent mr-2">{qi + 1}</span>
+                        <div className="text-[15px] text-ink leading-relaxed">
+                          <span className="font-mono text-[12.5px] text-accent mr-2">{qi + 1}</span>
                           {q.question}
                         </div>
                         <div className="mt-3 space-y-2">
@@ -158,7 +158,7 @@ export default function LearnPage() {
                                   next[qi] = oi;
                                   setAnswers(next);
                                 }}
-                                className={`w-full text-left rounded-[11px] border px-3.5 py-2.5 text-[13px] transition-all duration-200 ${
+                                className={`w-full text-left rounded-[11px] border px-3.5 py-2.5 text-[14.5px] transition-all duration-200 ${
                                   correct
                                     ? "border-ok bg-[#f0f5ee] text-ink"
                                     : wrong
@@ -168,7 +168,7 @@ export default function LearnPage() {
                                         : "border-line text-ink-soft hover:border-faint"
                                 }`}
                               >
-                                <span className="font-mono text-[11px] text-faint mr-2">
+                                <span className="font-mono text-[12.5px] text-faint mr-2">
                                   {String.fromCharCode(65 + oi)}
                                 </span>
                                 {opt}
@@ -177,7 +177,7 @@ export default function LearnPage() {
                           })}
                         </div>
                         {result && (
-                          <div className="mt-2 text-[12px] text-muted leading-relaxed pl-1">
+                          <div className="mt-2 text-[13.5px] text-muted leading-relaxed pl-1">
                             {result.details[qi]?.explanation || "见原文对应小节。"}
                           </div>
                         )}
@@ -188,7 +188,7 @@ export default function LearnPage() {
                   <div className="sticky bottom-0 bg-panel pt-3 pb-1 border-t border-line mt-4">
                     {result ? (
                       <div className="flex items-center justify-between">
-                        <div className="text-[13px]">
+                        <div className="text-[14.5px]">
                           <span className={result.passed ? "text-ok" : "text-warn"}>
                             {result.score} / {result.total}
                           </span>
@@ -214,7 +214,7 @@ export default function LearnPage() {
                       </div>
                     ) : (
                       <div className="flex items-center justify-between">
-                        <div className="text-[12px] text-muted">
+                        <div className="text-[13.5px] text-muted">
                           已答 {answers.filter((a) => a >= 0).length} / {quiz.questions.length}
                         </div>
                         <Button
@@ -331,18 +331,18 @@ function CoachPanel() {
               key={action.id}
               className="rounded-[10px] border border-accent/30 bg-accent-soft/50 px-3 py-2.5"
             >
-              <div className="flex items-center gap-1.5 text-[10.5px] tracking-wide text-accent">
+              <div className="flex items-center gap-1.5 text-[12px] tracking-wide text-accent">
                 <ShieldCheck size={12} />
                 待确认写入
                 <span className="ml-auto font-mono text-faint">
                   {remainingLabel(action.expires_at, now)}
                 </span>
               </div>
-              <div className="mt-1.5 text-[12.5px] leading-relaxed text-ink">{action.preview}</div>
+              <div className="mt-1.5 text-[14px] leading-relaxed text-ink">{action.preview}</div>
               <div className="mt-2 flex items-center gap-2">
                 <Button
                   variant="primary"
-                  className="!px-2.5 !py-1 !text-[11.5px] whitespace-nowrap"
+                  className="!px-2.5 !py-1 !text-[13px] whitespace-nowrap"
                   disabled={acting === action.id}
                   onClick={() => decide(action.id, true)}
                 >
@@ -350,31 +350,30 @@ function CoachPanel() {
                 </Button>
                 <Button
                   variant="ghost"
-                  className="!px-2.5 !py-1 !text-[11.5px] whitespace-nowrap"
+                  className="!px-2.5 !py-1 !text-[13px] whitespace-nowrap"
                   disabled={acting === action.id}
                   onClick={() => decide(action.id, false)}
                 >
                   <X size={12} /> 忽略
                 </Button>
-                <span className="text-[10.5px] text-faint">确认后才写入</span>
               </div>
             </div>
           ))}
         </div>
       )}
       {notice && (
-        <div className={`mb-2 text-[11.5px] ${notice.ok ? "text-ok" : "text-bad"}`}>{notice.text}</div>
+        <div className={`mb-2 text-[13px] ${notice.ok ? "text-ok" : "text-bad"}`}>{notice.text}</div>
       )}
       <div className="space-y-3 min-h-[120px] max-h-[420px] overflow-y-auto">
         {messages.length === 0 && (
-          <div className="text-[12.5px] text-muted leading-relaxed">
+          <div className="text-[14px] text-muted leading-relaxed">
             可以问我「我哪章最弱」「考考我考勤」，我会去查资料或直接出题。
           </div>
         )}
         {messages.map((m, i) => (
           <div key={i} className={m.role === "user" ? "text-right" : ""}>
             <div
-              className={`inline-block text-left rounded-[12px] px-3 py-2 text-[12.5px] leading-relaxed ${
+              className={`inline-block text-left rounded-[12px] px-3 py-2 text-[14px] leading-relaxed ${
                 m.role === "user" ? "bg-accent-soft text-ink" : "bg-paper text-ink-soft"
               }`}
             >
@@ -400,7 +399,7 @@ function CoachPanel() {
           <button
             key={q}
             onClick={() => send(q)}
-            className="rounded-full border border-line px-2.5 py-1 text-[11px] text-muted hover:text-accent hover:border-accent/40 transition-colors"
+            className="rounded-full border border-line px-2.5 py-1 text-[12.5px] text-muted hover:text-accent hover:border-accent/40 transition-colors"
           >
             {q}
           </button>
