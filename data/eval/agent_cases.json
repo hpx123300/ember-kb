@@ -1,0 +1,78 @@
+{
+  "version": "1.0",
+  "note": "Agent 轨迹评测集。与 qa_cases.json 的区别：那边评「答得对不对」，这边评「过程对不对」——工具选没选对、步数有没有超、有没有白跑。判定全部是确定性的，不需要模型判分，所以便宜、可复现。",
+  "cases": [
+    {
+      "id": "t01",
+      "question": "年假有几天？",
+      "expect_tools": ["search_knowledge"],
+      "forbid_tools": ["make_quiz", "get_progress"],
+      "must_mention": ["5 天"],
+      "max_steps": 3,
+      "note": "事实型问题：必须查资料，不该去动题库和进度"
+    },
+    {
+      "id": "t02",
+      "question": "客户投诉的处理流程是什么？",
+      "expect_tools": ["search_knowledge"],
+      "forbid_tools": ["make_quiz"],
+      "must_mention": ["投诉"],
+      "max_steps": 3,
+      "note": "销售/客服口径，仍然走检索，不该凭印象答"
+    },
+    {
+      "id": "t03",
+      "question": "出差住宿的报销标准是多少？",
+      "expect_tools": ["search_knowledge"],
+      "forbid_tools": ["make_quiz", "get_progress"],
+      "must_mention": ["报销"],
+      "max_steps": 3,
+      "note": "金额类问题，最容易编，必须落到检索"
+    },
+    {
+      "id": "t04",
+      "question": "帮我出 3 道考勤那章的题",
+      "expect_tools": ["make_quiz"],
+      "forbid_tools": ["get_progress"],
+      "must_mention": [],
+      "max_steps": 3,
+      "note": "明确的出题意图，应该直接调 make_quiz 而不是先讲一段"
+    },
+    {
+      "id": "t05",
+      "question": "我学到哪了？",
+      "expect_tools": ["get_progress"],
+      "forbid_tools": ["make_quiz"],
+      "must_mention": [],
+      "max_steps": 3,
+      "note": "进度型问题：数字必须来自工具，模型不能自己算"
+    },
+    {
+      "id": "t06",
+      "question": "我哪一章最弱？",
+      "expect_tools": ["get_progress"],
+      "forbid_tools": ["make_quiz"],
+      "must_mention": [],
+      "max_steps": 3,
+      "note": "同样是进度型，换个说法容易退化成闲聊"
+    },
+    {
+      "id": "t07",
+      "question": "公司股票什么时候上市？",
+      "expect_tools": ["search_knowledge"],
+      "forbid_tools": ["make_quiz"],
+      "must_mention": ["没有"],
+      "max_steps": 4,
+      "note": "语料外问题：允许检索后说没有，但不许编出时间表"
+    },
+    {
+      "id": "t08",
+      "question": "你好",
+      "expect_tools": [],
+      "forbid_tools": ["search_knowledge", "make_quiz", "get_progress"],
+      "must_mention": [],
+      "max_steps": 0,
+      "note": "寒暄不该触发任何工具。这条最容易翻车，也最能说明工具描述写得准不准"
+    }
+  ]
+}

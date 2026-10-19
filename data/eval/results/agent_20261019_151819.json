@@ -1,0 +1,247 @@
+{
+  "meta": {
+    "time": "2026-10-19 15:18:19",
+    "prompt_version": "68afd083e5",
+    "commit": "7d9e620",
+    "cases": 8,
+    "kind": "agent"
+  },
+  "summary": {
+    "cases": 8,
+    "task_success": 1.0,
+    "tool_selection": 1.0,
+    "no_redundant_calls": 1.0,
+    "avg_steps": 0.88,
+    "fallback_rate": 0.0,
+    "degraded_rate": 0.0,
+    "avg_latency_ms": 2347,
+    "p95_latency_ms": 3696
+  },
+  "records": [
+    {
+      "id": "t01",
+      "question": "年假有几天？",
+      "note": "事实型问题：必须查资料，不该去动题库和进度",
+      "tools_called": [
+        "search_knowledge"
+      ],
+      "steps": 1,
+      "degraded": false,
+      "empty_results": 0,
+      "failed_tools": 0,
+      "fallback": false,
+      "latency_ms": 3407,
+      "reply": "年假按入职年限算：满 1 年 5 天，满 3 年 7 天，满 5 年 10 天，都是带薪的。\n\n几个要点：以自然年为周期，当年没休完可顺延到次年 3 月 31 日，逾期作废；申请要提前 3 个工作日提交，连续 3 天以上需直属上级和部门负责人双签（见《年假》）。\n\n需要我出几道考勤章的题帮你巩固吗？",
+      "failures": [],
+      "events": [
+        {
+          "tool": "search_knowledge",
+          "arguments": {
+            "query": "年假天数 年休假规定",
+            "category": "制度"
+          },
+          "ok": true,
+          "latency_ms": 713,
+          "result_chars": 444,
+          "empty": false,
+          "degraded": false,
+          "failed": false
+        }
+      ]
+    },
+    {
+      "id": "t02",
+      "question": "客户投诉的处理流程是什么？",
+      "note": "销售/客服口径，仍然走检索，不该凭印象答",
+      "tools_called": [
+        "search_knowledge"
+      ],
+      "steps": 1,
+      "degraded": false,
+      "empty_results": 0,
+      "failed_tools": 0,
+      "fallback": false,
+      "latency_ms": 2517,
+      "reply": "知识库里没有「客户投诉处理流程」这一条，检索到的都是具体场景的客服口径（导出会话记录、转人工慢、系统卡顿、机器人答非所问），没有统一的投诉处理流程说明（见《support-faq.md》各条）。\n\n如果你要的是某个具体场景的处理办法，告诉我是哪一类，我再查。或者你确认一下章节名，我看看是不是在别的资料里。",
+      "failures": [],
+      "events": [
+        {
+          "tool": "search_knowledge",
+          "arguments": {
+            "query": "客户投诉处理流程",
+            "category": "客服"
+          },
+          "ok": true,
+          "latency_ms": 170,
+          "result_chars": 791,
+          "empty": false,
+          "degraded": false,
+          "failed": false
+        }
+      ]
+    },
+    {
+      "id": "t03",
+      "question": "出差住宿的报销标准是多少？",
+      "note": "金额类问题，最容易编，必须落到检索",
+      "tools_called": [
+        "search_knowledge"
+      ],
+      "steps": 1,
+      "degraded": false,
+      "empty_results": 0,
+      "failed_tools": 0,
+      "fallback": false,
+      "latency_ms": 1923,
+      "reply": "住宿标准按城市分三档：一线城市 500 元/晚，二线城市 400 元/晚，其他城市 300 元/晚，超标部分自理（见《差旅标准》）。\n\n另外提醒两点：单据要在费用发生后 30 天内提交，每月 5 日和 20 日统一打款（见《报销周期》）。",
+      "failures": [],
+      "events": [
+        {
+          "tool": "search_knowledge",
+          "arguments": {
+            "query": "出差住宿报销标准",
+            "category": "制度"
+          },
+          "ok": true,
+          "latency_ms": 150,
+          "result_chars": 755,
+          "empty": false,
+          "degraded": false,
+          "failed": false
+        }
+      ]
+    },
+    {
+      "id": "t04",
+      "question": "帮我出 3 道考勤那章的题",
+      "note": "明确的出题意图，应该直接调 make_quiz 而不是先讲一段",
+      "tools_called": [
+        "make_quiz"
+      ],
+      "steps": 1,
+      "degraded": false,
+      "empty_results": 0,
+      "failed_tools": 0,
+      "fallback": false,
+      "latency_ms": 3696,
+      "reply": "考勤与假期这章，3 道题：\n\n1. 弹性上下班时段内最晚可以几点打卡上班？\nA. 9:00　B. 9:30　C. 10:00　D. 10:30\n\n2. 漏打卡补卡申请，每月最多几次无需部门负责人审批？\nA. 1 次　B. 2 次　C. 3 次　D. 5 次\n\n3. 连续 3 天以上年假需要什么审批？\nA. 仅直属上级　B. 仅部门负责人　C. 直属上级与部门负责人双签　D. 无需审批\n\n先自己答，答完我发答案和解析（见《考勤与假期》）。",
+      "failures": [],
+      "events": [
+        {
+          "tool": "make_quiz",
+          "arguments": {
+            "chapter": "考勤与假期",
+            "count": 3
+          },
+          "ok": true,
+          "latency_ms": 1995,
+          "result_chars": 631,
+          "empty": false,
+          "degraded": false,
+          "failed": false
+        }
+      ]
+    },
+    {
+      "id": "t05",
+      "question": "我学到哪了？",
+      "note": "进度型问题：数字必须来自工具，模型不能自己算",
+      "tools_called": [
+        "get_progress"
+      ],
+      "steps": 1,
+      "degraded": false,
+      "empty_results": 0,
+      "failed_tools": 0,
+      "fallback": false,
+      "latency_ms": 2197,
+      "reply": "你目前还没有开始学习：9 个章节里已学 0 章、已通过 0 章，完成率 0%。未开始的章节有《产品手册》《考勤与假期》《报销与采购》《信息安全与合规》等。\n\n建议先从《考勤与假期》入手，它最贴近日常。想开始的话，我可以先给你出 3 道题摸摸底。",
+      "failures": [],
+      "events": [
+        {
+          "tool": "get_progress",
+          "arguments": {},
+          "ok": true,
+          "latency_ms": 163,
+          "result_chars": 99,
+          "empty": false,
+          "degraded": false,
+          "failed": false
+        }
+      ]
+    },
+    {
+      "id": "t06",
+      "question": "我哪一章最弱？",
+      "note": "同样是进度型，换个说法容易退化成闲聊",
+      "tools_called": [
+        "get_progress"
+      ],
+      "steps": 1,
+      "degraded": false,
+      "empty_results": 0,
+      "failed_tools": 0,
+      "fallback": false,
+      "latency_ms": 1845,
+      "reply": "你目前还没有开始学习，9 章里已学 0 章、通过 0 章，所以暂时没有薄弱章节的数据。\n\n未开始的章节有：产品手册、考勤与假期、报销与采购、信息安全与合规。\n\n建议先从「考勤与假期」入手，比较基础。学完一章我可以出题帮你检验，也可以直接说「考考我」加章节名。",
+      "failures": [],
+      "events": [
+        {
+          "tool": "get_progress",
+          "arguments": {},
+          "ok": true,
+          "latency_ms": 180,
+          "result_chars": 99,
+          "empty": false,
+          "degraded": false,
+          "failed": false
+        }
+      ]
+    },
+    {
+      "id": "t07",
+      "question": "公司股票什么时候上市？",
+      "note": "语料外问题：允许检索后说没有，但不许编出时间表",
+      "tools_called": [
+        "search_knowledge"
+      ],
+      "steps": 1,
+      "degraded": false,
+      "empty_results": 0,
+      "failed_tools": 0,
+      "fallback": false,
+      "latency_ms": 1714,
+      "reply": "知识库里没有关于公司股票上市的信息，我不能凭印象回答。如果你问的是其他制度或产品问题，可以告诉我具体方向，我帮你查。",
+      "failures": [],
+      "events": [
+        {
+          "tool": "search_knowledge",
+          "arguments": {
+            "query": "公司股票上市时间"
+          },
+          "ok": true,
+          "latency_ms": 138,
+          "result_chars": 755,
+          "empty": false,
+          "degraded": false,
+          "failed": false
+        }
+      ]
+    },
+    {
+      "id": "t08",
+      "question": "你好",
+      "note": "寒暄不该触发任何工具。这条最容易翻车，也最能说明工具描述写得准不准",
+      "tools_called": [],
+      "steps": 0,
+      "degraded": false,
+      "empty_results": 0,
+      "failed_tools": 0,
+      "fallback": false,
+      "latency_ms": 1482,
+      "reply": "你好，我是薪火培训教练。可以帮你查公司制度、产品资料、销售话术和客服口径，也能出题测验、看学习进度。想从哪开始？",
+      "failures": [],
+      "events": []
+    }
+  ]
+}
