@@ -79,18 +79,26 @@ def _chapter_title(source: str, sections: list[str]) -> str:
     return mapping.get(stem, sections[0] if sections else stem)
 
 
-def _chapter_chunks(chapter_id: str) -> list[dict]:
+def _chapter_chunks(chapter_id: str, audiences: set[str] | None = None) -> list[dict]:
     knowledge_base.load()
-    return [c for c in knowledge_base.chunks if c["source"] == chapter_id]
+    return [
+        c
+        for c in knowledge_base.chunks
+        if c["source"] == chapter_id and _visible(c, audiences)
+    ]
 
 
-def generate_quiz(chapter_id: str, count: int = 5) -> list[dict]:
+def generate_quiz(
+    chapter_id: str,
+    count: int = 5,
+    audiences: set[str] | None = None,
+) -> list[dict]:
     """为某一章生成测验题。
 
     优先让模型出题（题干自然、干扰项合理）；模型不可用时退化为填空题，
     保证培训流程不会因为一次 API 失败而中断——这是内部工具的基本要求。
     """
-    chunks = _chapter_chunks(chapter_id)
+    chunks = _chapter_chunks(chapter_id, audiences)
     if not chunks:
         return []
     count = max(1, min(count, 8))
@@ -178,6 +186,7 @@ def create_quiz_session(
     count: int = 5,
     employee: str = "local",
     chapter_title: str = "",
+    audiences: set[str] | None = None,
 ) -> dict:
     """出一套题并开一次测验会话。
 
@@ -185,7 +194,7 @@ def create_quiz_session(
     旧版本把 correct 交给前端、提交时再传回来，改一个请求体就能拿满分——
     培训数据一旦能刷，学情就没有任何意义。
     """
-    questions = generate_quiz(chapter_id, count=count)
+    questions = generate_quiz(chapter_id, count=count, audiences=audiences)
     if not questions:
         return {"session_id": "", "questions": [], "chapter": chapter_id, "count": 0}
 

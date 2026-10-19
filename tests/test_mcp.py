@@ -5,6 +5,7 @@
 """
 
 import json
+import inspect
 
 import mcp_server
 
@@ -49,6 +50,16 @@ def test_empty_question_is_rejected():
 
 
 def test_progress_is_plain_numbers():
-    payload = json.loads(mcp_server.get_progress("nobody-xyz"))
+    payload = json.loads(mcp_server.get_progress())
     assert payload["passed"] == 0
     assert payload["total_chapters"] >= 8
+
+
+def test_progress_uses_fixed_mcp_employee(monkeypatch):
+    """外部智能体不能通过工具参数查询任意员工。"""
+    monkeypatch.setattr(mcp_server, "MCP_EMPLOYEE", "sales")
+
+    payload = json.loads(mcp_server.get_progress())
+
+    assert payload["employee"] == "sales"
+    assert list(inspect.signature(mcp_server.get_progress).parameters) == []

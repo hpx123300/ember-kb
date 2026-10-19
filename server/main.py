@@ -39,7 +39,12 @@ from backend.app.auth import (  # noqa: E402
     seed_users,
     verify_password,
 )
-from backend.app.chat_history import clear_messages, load_messages, save_message  # noqa: E402
+from backend.app.chat_history import (  # noqa: E402
+    SessionAccessError,
+    clear_messages,
+    load_messages,
+    save_message,
+)
 from backend.app.coach import coach_stream  # noqa: E402
 from backend.app.db import User, get_session, init_db  # noqa: E402
 from backend.app.flow import ask_stream  # noqa: E402
@@ -152,7 +157,15 @@ class CoachRequest(BaseModel):
 @app.post("/api/coach")
 def coach(req: CoachRequest, user: CurrentUser = Depends(get_current_user)):
     session_id = (req.session_id or "").strip() or f"coach-{uuid.uuid4().hex[:8]}"
-    save_message(session_id, "user", req.message.strip())
+    try:
+        save_message(
+            session_id,
+            "user",
+            req.message.strip(),
+            employee=user.employee_key,
+        )
+    except SessionAccessError:
+        return JSONResponse({"error": "无权访问该会话"}, status_code=403)
     profile_text = profile_prompt(build_profile(user.employee_key, user.allowed_audiences()))
 
     def gen():
@@ -170,7 +183,12 @@ def coach(req: CoachRequest, user: CurrentUser = Depends(get_current_user)):
                     full += event["text"]
                 yield _sse(event)
             if full:
-                save_message(session_id, "assistant", full)
+                save_message(
+                    session_id,
+                    "assistant",
+                    full,
+                    employee=user.employee_key,
+                )
         except AgentError as exc:
             yield _sse({"type": "error", "error": str(exc)})
         except Exception as exc:  # noqa: BLE001
@@ -181,12 +199,18 @@ def coach(req: CoachRequest, user: CurrentUser = Depends(get_current_user)):
 
 @app.get("/api/coach/history")
 def coach_history(session_id: str, user: CurrentUser = Depends(get_current_user)):
-    return load_messages(session_id, limit=50)
+    try:
+        return load_messages(session_id, limit=50, employee=user.employee_key)
+    except SessionAccessError:
+        return JSONResponse({"error": "会话不存在"}, status_code=404)
 
 
 @app.delete("/api/coach/history")
 def coach_history_clear(session_id: str, user: CurrentUser = Depends(get_current_user)):
-    clear_messages(session_id)
+    try:
+        clear_messages(session_id, employee=user.employee_key)
+    except SessionAccessError:
+        return JSONResponse({"error": "会话不存在"}, status_code=404)
     return {"ok": True}
 
 
@@ -234,6 +258,7 @@ def quiz(req: QuizRequest, user: CurrentUser = Depends(get_current_user)):
             count=req.count,
             employee=user.employee_key,
             chapter_title=matched["title"],
+            audiences=user.allowed_audiences(),
         )
     except Exception as exc:  # noqa: BLE001
         return _err(exc)

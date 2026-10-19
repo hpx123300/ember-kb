@@ -40,6 +40,7 @@ from backend.app.profile import build_profile  # noqa: E402
 DEFAULT_DEPARTMENT = os.getenv("EMBER_MCP_AUDIENCE", "全员")
 # 没有对应账号时按最保守处理：只能看全员资料。
 AUDIENCES = UNIVERSAL_AUDIENCES | ({DEFAULT_DEPARTMENT} if DEFAULT_DEPARTMENT != "全员" else set())
+MCP_EMPLOYEE = os.getenv("EMBER_MCP_EMPLOYEE", "local")
 
 server = MCPServer(
     name="ember-kb",
@@ -122,7 +123,11 @@ def generate_quiz(chapter: str = "", count: int = 3) -> str:
     matched = next((c for c in chapters if c["id"] == chapter or c["title"] == chapter), None)
     if matched is None:
         matched = chapters[0]
-    questions = training.generate_quiz(matched["id"], count=max(1, min(int(count or 3), 8)))
+    questions = training.generate_quiz(
+        matched["id"],
+        count=max(1, min(int(count or 3), 8)),
+        audiences=AUDIENCES,
+    )
     return _dump(
         {
             "chapter": matched["title"],
@@ -140,9 +145,9 @@ def generate_quiz(chapter: str = "", count: int = 3) -> str:
     )
 
 
-@server.tool(description="查看某位员工的学习进度：已通过章节、薄弱章节、未开始章节。")
-def get_progress(employee: str = "local") -> str:
-    data = build_profile(employee, AUDIENCES)
+@server.tool(description="查看启动时固定员工的学习进度：已通过章节、薄弱章节、未开始章节。")
+def get_progress() -> str:
+    data = build_profile(MCP_EMPLOYEE, AUDIENCES)
     return _dump(
         {
             "employee": data["employee"],

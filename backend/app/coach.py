@@ -39,7 +39,10 @@ def build_coach(memory: Memory | None = None, profile_text: str = "") -> AgentLo
 def coach_stream(message: str, session_id: str, employee: str = "local", audiences=None, profile_text: str = ""):
     """流式对话，事件格式与问答一致，前端可以复用同一套渲染。"""
     with user_scope(employee, audiences, session_id):
-        coach = build_coach(Memory(session_id, max_messages=20), profile_text=profile_text)
+        coach = build_coach(
+            Memory(session_id, max_messages=20, employee=employee),
+            profile_text=profile_text,
+        )
         for chunk in coach.chat_stream(message):
             if chunk:
                 yield {"type": "token", "text": chunk}

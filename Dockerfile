@@ -17,9 +17,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY backend/ ./backend/
 COPY server/ ./server/
 COPY scripts/ ./scripts/
+COPY alembic.ini ./
+COPY migrations/ ./migrations/
 COPY data/knowledge/ ./data/knowledge/
 COPY data/eval/ ./data/eval/
 COPY --from=web /app/web/dist ./web/dist
 
 EXPOSE 8001
-CMD ["uvicorn", "server.main:app", "--host", "0.0.0.0", "--port", "8001"]
+CMD ["sh", "-c", "alembic upgrade head && uvicorn server.main:app --host 0.0.0.0 --port 8001"]

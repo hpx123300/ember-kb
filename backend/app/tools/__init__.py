@@ -15,6 +15,7 @@ import re
 
 from .. import actions, training
 from ..agent.rag import knowledge_base
+from ..profile import build_profile
 from ..runtime import current_audiences, current_employee, current_session
 
 # 问句里的虚词与疑问成分：参与检索只会让 BM25 的候选变脏，不带来召回
@@ -102,20 +103,21 @@ def search_knowledge(query: str = "", category: str = "") -> str:
 
 def make_quiz(chapter: str = "", count: int = 3) -> str:
     """为某一章生成测验题。chapter 传章节 id（文件名）或章节名。"""
-    chapters = training.list_chapters()
+    audiences = current_audiences()
+    chapters = training.list_chapters(audiences)
     if not chapter:
         chapter = chapters[0]["id"] if chapters else ""
     matched = next((c for c in chapters if c["id"] == chapter or c["title"] == chapter), None)
     if matched is None:
         names = "、".join(f"{c['title']}({c['id']})" for c in chapters[:8])
         return f"没有找到这一章。可选：{names}"
-    questions = training.generate_quiz(matched["id"], count=int(count))
+    questions = training.generate_quiz(matched["id"], count=int(count), audiences=audiences)
     return json.dumps({"chapter": matched["title"], "questions": questions}, ensure_ascii=False)
 
 
 def get_progress() -> str:
     """查看学习进度与薄弱章节。"""
-    data = training.mastery(current_employee())
+    data = build_profile(current_employee(), current_audiences())
     summary = {
         "总章节": data["total_chapters"],
         "已学": data["studied"],

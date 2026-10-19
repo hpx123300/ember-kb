@@ -9,7 +9,8 @@
 
 import json
 
-from backend.app import tools
+from backend.app import tools, training
+from backend.app.runtime import user_scope
 
 
 def _encode(payload) -> str:
@@ -79,3 +80,30 @@ def test_success_leaves_degraded_null(monkeypatch):
 
     assert payload["results"]
     assert payload["degraded"] is None
+
+
+def test_make_quiz_rejects_foreign_department(monkeypatch):
+    """销售不能通过教练工具给客服专属章节出题，否则部门过滤只保护了问答入口。"""
+    called = {"quiz": False}
+
+    def fake_quiz(*args, **kwargs):
+        called["quiz"] = True
+        return [{"question": "客服题库", "options": ["A", "B", "C"], "answer_index": 0,
+                 "explanation": "e", "knowledge_point": "k"}]
+
+    monkeypatch.setattr(training, "generate_quiz", fake_quiz)
+
+    with user_scope("sales", {"全员", "新员工", "销售"}):
+        result = tools.make_quiz("support-faq.md", 1)
+
+    assert "没有找到这一章" in result
+    assert called["quiz"] is False
+
+
+def test_get_progress_counts_only_visible_chapters():
+    """教练进度工具必须和章节列表使用相同的 13 个销售可见章节。"""
+    with user_scope("sales", {"全员", "新员工", "销售"}):
+        payload = json.loads(tools.get_progress())
+
+    assert payload["总章节"] == 13
+    assert "客户常见问题" not in payload["未开始"]

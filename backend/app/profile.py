@@ -45,15 +45,17 @@ def build_profile(employee: str, audiences: set[str] | None = None) -> dict:
         key=lambda c: c["best"],
     )
     untouched = [c["title"] for c in chapters if c["attempts"] == 0]
+    studied = [c for c in chapters if c["attempts"] > 0]
+    passed = [c for c in chapters if c["passed"]]
 
     return {
         "employee": employee,
-        "total_chapters": data["total_chapters"],
-        "studied": data["studied"],
-        "passed": data["passed"],
-        "completion": data["completion"],
+        "total_chapters": len(chapters),
+        "studied": len(studied),
+        "passed": len(passed),
+        "completion": round(len(passed) / max(len(chapters), 1), 3),
         # 前端要按章节渲染掌握度，这里把原始明细一并带出，避免再请求一次
-        "chapters": [c for c in data["chapters"] if c["chapter"] in visible_ids],
+        "chapters": chapters,
         "weak": [{"title": c["title"], "best": c["best"], "attempts": c["attempts"]} for c in weak[:3]],
         "untouched": untouched[:4],
         "recent_questions": recent_questions(employee),

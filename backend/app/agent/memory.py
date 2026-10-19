@@ -66,8 +66,15 @@ class Memory:
     一旦遇到带 tool_calls 的消息或 tool 消息就停下，避免切断配对导致 API 400。
     """
 
-    def __init__(self, session_id: str, max_messages: int = 24, keep_recent: int = 8):
+    def __init__(
+        self,
+        session_id: str,
+        max_messages: int = 24,
+        keep_recent: int = 8,
+        employee: str | None = None,
+    ):
         self.session_id = session_id
+        self.employee = employee
         self.max_messages = max_messages
         self.keep_recent = keep_recent
         self.summary = ""
@@ -79,11 +86,15 @@ class Memory:
         try:
             from ..chat_history import load_messages_since, load_summary
 
-            self.summary, self.covered_until_id = load_summary(self.session_id)
+            self.summary, self.covered_until_id = load_summary(
+                self.session_id,
+                employee=self.employee,
+            )
             self._messages = load_messages_since(
                 self.session_id,
                 after_id=self.covered_until_id,
                 limit=self.max_messages * 2,
+                employee=self.employee,
             )
         except Exception:  # noqa: BLE001
             self._messages = []

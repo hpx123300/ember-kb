@@ -4,7 +4,32 @@
 员工问一句就能得到**带出处**的答案；学完一章可以当堂测验，测验结果自动汇成学情。
 
 不是「接个大模型就能问答」的演示：**查不到会拒答，答出来能点回原文，答完能考，考完有记录，
-没权限的资料看不到**。
+问答检索会按部门过滤资料**。
+
+**文档入口**：[界面与快速开始](#界面) · [需求与功能边界](#项目定位与需求) ·
+[架构](#架构) · [目录结构](#目录) · [测试与评测](#测试与评测) ·
+[技术设计](docs/技术设计.md) · [已知限制](#现在还没做好的地方)
+
+## 项目定位与需求
+
+这不是面向公众的通用聊天机器人，也不是完整的 OA 或 LMS。它解决的是一个更具体的问题：
+企业内部资料分散在 Markdown、制度和产品文档里，员工找不到、看不懂，普通大模型又容易在没有依据时继续作答。
+
+| 维度 | 说明 |
+| --- | --- |
+| 目标用户 | 20-200 人、已有内部文档但缺少统一知识入口的中小团队 |
+| 直接使用者 | 新员工、销售、客服、交付、培训负责人和资料管理员 |
+| 核心需求 | 快速找到有出处的内部答案；资料不足时明确拒答；培训结果可追踪 |
+| 产品闭环 | 资料导入 → 部门过滤检索 → 可引用问答 → 章节测验 → 学情画像 |
+| 典型场景 | 查年假与报销制度、查销售话术、查客服口径、按章节学习并测验 |
+
+### 功能边界
+
+当前已经实现：部门范围检索、LangGraph 问答图、引用映射、培训章节与测验、学情聚合、
+Markdown 资料管理、Function Calling 教练、专员路由、MCP、链路和成本指标。
+
+当前不包含：企业 SSO/LDAP、细粒度文档 ACL、正式 LMS 课程体系、Word/PDF 文档导入、
+多租户计费、复杂审批流和默认开启的向量检索。这些边界也记录在[已知限制](#现在还没做好的地方)。
 
 ## 这个项目换过一次方向
 
@@ -75,7 +100,7 @@
 | 平均工具步数 | 0.88 | 大部分问题一次调用就够；寒暄不触发工具 |
 | 兜底率 | 0% | 没有一次是靠「步数用完，把已有结果拼一拼」结束的 |
 
-这 8 条样本很小，而且是照着现有三个工具写的，1.0 只能说明「没有已知的退化」，
+这 8 条样本很小，而且是照着现有四个工具写的，1.0 只能说明「没有已知的退化」，
 不能说明「Agent 行为普遍正确」。它的实际用途是回归基线——改提示词或工具描述后重跑，
 看有没有从 8/8 掉下来。掉下来通常意味着某句工具说明改坏了。
 
@@ -84,7 +109,12 @@
 Python 3.13 · FastAPI · SQLAlchemy + Alembic · SQLite / MySQL · PyJWT · jieba BM25 ·
 LangGraph · MCP · DeepSeek（OpenAI 兼容）
 React 18 · TypeScript · Vite · Tailwind v4 · lucide-react
-pytest（79 项）· GitHub Actions
+pytest（84 项）· GitHub Actions
+
+当前仓库包含 17 份示例资料、74 个检索片段和 17 个派生章节。最近一次本地验证结果为：
+后端 84 项测试通过、前端 TypeScript 检查通过、Vite 生产构建通过。真实模型评测需要配置
+`DEEPSEEK_API_KEY` 并产生调用费用，因此 CI 只运行确定性测试，评测结果通过
+`data/eval/results/` 留档。
 
 ## 架构
 
@@ -151,7 +181,8 @@ python scripts/seed_demo.py   # 可选：灌几条学习记录，学情页有东
 每个 chunk 自带 `cite`（`文件名#章节`），回答里写 `[1]`，服务端把编号映射回真实来源，
 前端渲染成可展开的出处卡片。模型编出 `[9]` 这种不存在的编号会被丢弃，不会凭空造引用。
 
-回答若一条引用都没有，会重试一次更严格的提示；仍拿不到就标记为「无依据」，不当作正常回答。
+回答若一条引用都没有，会重试一次更严格的提示。流程状态中会保留 `ungrounded` 标记；
+当前 SSE 的 `meta` 尚未单独下发该字段，前端主要通过“无 citations”识别这一情况。
 
 ### 3. 权限下沉到检索层，而不是停在接口层
 
@@ -270,6 +301,10 @@ trace_id 用 ContextVar 传递，模型调用和工具调用不需要改函数�
 **摘要的摘要会衰减。** 会话被压缩多次之后，早期信息要经过「摘要的摘要」，
 细节会慢慢磨掉。现在只在 20 条上下验证过一次，更长的会话没有测过保真度。
 
+**权限能力仍不是完整企业 ACL。** 问答检索、HTTP 章节、教练工具与教练历史已经统一使用
+用户或部门的可见范围；MCP 也把员工身份固定在启动配置中。但当前没有按单个文档授权、
+文档 ACL 管理界面或外部 IdP 对接，资料列表仍会展示可管理文档的元信息。
+
 ## 接入 OpenClaw / 其他智能体（MCP）
 
 ```bash
@@ -278,6 +313,9 @@ python mcp_server.py
 
 # 以销售身份运行
 EMBER_MCP_AUDIENCE=销售 python mcp_server.py
+
+# 固定进度工具查看的员工，调用方不能通过工具参数切换
+EMBER_MCP_EMPLOYEE=sales python mcp_server.py
 ```
 
 挂到 OpenClaw：
@@ -306,7 +344,7 @@ DATABASE_URL=mysql+pymysql://... alembic upgrade head # 切 MySQL
 ## 测试与评测
 
 ```bash
-pytest tests/ -q                       # 79 项：检索过滤、拒答分支、引用映射、权限隔离、
+pytest tests/ -q                       # 84 项：检索过滤、拒答分支、引用映射、权限隔离、
                                        # 出题校验、会话判分、路由兜底、工具降级、
                                        # 确认闸门、摘要压缩、MCP、接口联调
 python scripts/eval_qa.py --save       # 42 条标注集：答案质量
@@ -330,35 +368,43 @@ python scripts/eval_agent.py --save    # 8 条轨迹用例：工具选择、步�
 ## 目录
 
 ```
-backend/app/
-  flow.py         知识问答图（检索 → 判官 → 回答/拒答）
-  supervisor.py   专员路由与汇总
-  coach.py        培训教练（Function Calling）
-  training.py     章节、会话式出题、服务端判分、学情
-  profile.py      员工画像
-  auth.py         账号、JWT、部门可见范围
-  observability.py 链路追踪
-  library.py      资料管理
-  actions.py      待确认写操作的状态机
-  llm.py          模型调用（文本 / JSON / 流式）
-  metrics.py      成本与延迟记账
-  db.py           账号、会话、学习记录、测验会话、指标、链路
-  agent/
-    rag.py        分块 + 元信息 + BM25（可选向量）+ RRF + 部门过滤
-    loop.py       Function Calling 循环（同步 + 流式）
-    memory.py     消息序列安全截断
-    roles.py      教练提示词 + 版本号
-  tools/          工具声明与实现
-server/main.py    API 与静态托管
-mcp_server.py     MCP Server（stdio）
-migrations/       Alembic 迁移
-scripts/
-  eval_qa.py      问答评测
-  eval_agent.py   Agent 轨迹评测
-  seed_demo.py    演示学习记录
-web/              React 前端
-data/knowledge/   17 份企业资料（虚构公司，自编内容）
-data/eval/        标注集与历史报告
+.
+├── backend/                 后端业务代码
+│   └── app/
+│       ├── flow.py          LangGraph 问答图与流式接口
+│       ├── supervisor.py    专员路由
+│       ├── coach.py         Function Calling 教练
+│       ├── training.py      章节、出题、判分与学情
+│       ├── auth.py          账号、JWT 与部门范围
+│       ├── library.py       Markdown 资料管理
+│       ├── actions.py       待确认写操作状态机
+│       ├── observability.py trace 与链路回放
+│       ├── metrics.py       token、成本、延迟和工具指标
+│       ├── db.py            SQLAlchemy 模型与会话
+│       ├── agent/           检索、工具循环、记忆和角色提示词
+│       └── tools/           教练工具 Schema 与实现
+├── server/main.py           FastAPI 入口与静态托管
+├── mcp_server.py            MCP stdio Server
+├── migrations/              Alembic 迁移
+├── scripts/                 评测与演示数据脚本
+├── tests/                   后端测试
+├── web/                     React + TypeScript 前端
+│   ├── src/                 页面、组件、API 与类型
+│   └── dist/                可直接由后端托管的生产构建
+├── data/
+│   ├── knowledge/           17 份 Markdown 示例资料
+│   └── eval/                标注集与历史评测报告
+├── docs/
+│   ├── screens/             页面截图
+│   └── 技术设计.md          架构取舍、评测与部署细节
+├── .github/workflows/       GitHub Actions
+├── Dockerfile               单容器多阶段构建
+├── alembic.ini              数据库迁移配置
+├── requirements.txt         后端依赖
+├── requirements-rag.txt     可选向量检索依赖
+├── start.command            macOS 一键启动
+├── .env.example             环境变量模板
+└── README.md                项目总览与上手指南
 ```
 
 ## License

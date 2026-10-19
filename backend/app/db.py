@@ -52,6 +52,7 @@ class ChatMessage(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     session_id: Mapped[str] = mapped_column(String(64), index=True)
+    employee: Mapped[str] = mapped_column(String(32), index=True, default="")
     role: Mapped[str] = mapped_column(String(16))
     content: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(default=utcnow)
@@ -191,6 +192,7 @@ class SessionSummary(Base):
     __tablename__ = "session_summaries"
 
     session_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    employee: Mapped[str] = mapped_column(String(32), index=True, default="")
     summary: Mapped[str] = mapped_column(Text, default="")
     covered_until_id: Mapped[int] = mapped_column(default=0)
     updated_at: Mapped[datetime] = mapped_column(default=utcnow)

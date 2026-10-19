@@ -180,7 +180,12 @@ class AgentLoop:
             try:
                 from ..chat_history import save_summary
 
-                save_summary(self.memory.session_id, summary, self.memory.covered_until_id)
+                save_summary(
+                    self.memory.session_id,
+                    summary,
+                    self.memory.covered_until_id,
+                    employee=self.memory.employee or "local",
+                )
             except Exception:  # noqa: BLE001
                 # 落盘失败不影响本轮：摘要还在内存里，下一次请求重新计算即可
                 pass

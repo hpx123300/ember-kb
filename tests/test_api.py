@@ -114,3 +114,46 @@ def test_mastery_is_per_user():
     assert data["employee"] == "admin"
     assert "total_chapters" in data
     assert "weak" in data
+
+
+def test_coach_history_is_owner_scoped():
+    """客服拿到销售的 session_id 也不能读取或删除销售历史。"""
+    import uuid
+
+    from backend.app.chat_history import save_message
+
+    session_id = f"ownership-{uuid.uuid4().hex[:10]}"
+    save_message(session_id, "user", "销售专属对话", employee="sales")
+
+    sales = _login("sales", "sales12345")
+    support = _login("support", "support12345")
+
+    own = client.get(f"/api/coach/history?session_id={session_id}", headers=_auth(sales))
+    assert own.status_code == 200
+    assert any(item["content"] == "销售专属对话" for item in own.json())
+
+    foreign_read = client.get(f"/api/coach/history?session_id={session_id}", headers=_auth(support))
+    foreign_clear = client.delete(f"/api/coach/history?session_id={session_id}", headers=_auth(support))
+    assert foreign_read.status_code == 404
+    assert foreign_clear.status_code == 404
+
+    still_there = client.get(f"/api/coach/history?session_id={session_id}", headers=_auth(sales))
+    assert any(item["content"] == "销售专属对话" for item in still_there.json())
+
+
+def test_coach_rejects_foreign_session_before_llm():
+    """不能向别人已经使用的教练会话继续追加消息。"""
+    import uuid
+
+    from backend.app.chat_history import save_message
+
+    session_id = f"ownership-{uuid.uuid4().hex[:10]}"
+    save_message(session_id, "user", "销售专属对话", employee="sales")
+    support = _login("support", "support12345")
+
+    res = client.post(
+        "/api/coach",
+        json={"message": "继续聊", "session_id": session_id},
+        headers=_auth(support),
+    )
+    assert res.status_code == 403

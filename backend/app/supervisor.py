@@ -90,7 +90,7 @@ def answer(question: str, employee: str = "local", name: str = "", audiences=Non
             refused = result["refused"]
         elif agent_key == "coach":
             coach = build_coach(
-                Memory(f"assistant-{employee}", max_messages=20),
+                Memory(f"assistant-{employee}", max_messages=20, employee=employee),
                 profile_text=profile_prompt(build_profile(employee, audiences)),
             )
             reply, _ = coach.chat(question)

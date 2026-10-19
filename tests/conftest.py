@@ -36,4 +36,8 @@ def pytest_configure(config):
     放到项目内既避开限制，也让清理更直观。
     """
     if not config.option.basetemp:
-        config.option.basetemp = str(PROJECT_ROOT / ".pytest_cache" / "tmp")
+        tmp_root = PROJECT_ROOT / ".pytest_cache" / "tmp"
+        # 清理缓存后 .pytest_cache 本身可能不存在，而 pytest 创建 basetemp
+        # 时不会递归补父目录；测试配置必须自己恢复这个可重建目录。
+        tmp_root.mkdir(parents=True, exist_ok=True)
+        config.option.basetemp = str(tmp_root)
